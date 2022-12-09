@@ -2,6 +2,46 @@
 
 void clearResources(int);
 
+/**
+ * @brief Create a Process object
+ *
+ * @param pid
+ * @param arrivalTime
+ * @param executionTime
+ * @param memSize
+ * @return ProcessControlBlock*
+ */
+ProcessControlBlock *createProcess(
+    int pid,
+    int arrivalTime,
+    int executionTime,
+    int memSize)
+{
+    ProcessControlBlock *newProcess = (ProcessControlBlock *)malloc(
+        sizeof(ProcessControlBlock));
+    newProcess->PID = pid;
+    newProcess->arrivalTime = arrivalTime;
+    newProcess->executionTime = executionTime;
+    newProcess->memSize = memSize;
+    return newProcess;
+}
+
+/**
+ * @brief
+ *
+ * @param fileName
+ * @param processInfoArray
+ */
+void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[]);
+
+/**
+ * @brief Get the Scheduler Algorithm object
+ *
+ * @param algorithmName
+ * @return SchedulingAlgorithm_t
+ */
+SchedulingAlgorithm_t getSchedulerAlgorithm(char *algorithmName);
+
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
@@ -11,7 +51,7 @@ int main(int argc, char *argv[])
     // 3. Initiate and create the scheduler and clock processes.
     // 4. Use this function after creating the clock process to initialize clock.
     initClk();
-    // To get time use this function. 
+    // To get time use this function.
     int x = getClk();
     printf("Current Time is %d\n", x);
     // TODO Generation Main Loop
@@ -23,5 +63,5 @@ int main(int argc, char *argv[])
 
 void clearResources(int signum)
 {
-    //TODO Clears all resources in case of interruption
+    // TODO Clears all resources in case of interruption
 }
