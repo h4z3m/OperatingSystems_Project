@@ -127,7 +127,22 @@ void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
  * @param algorithmName
  * @return SchedulingAlgorithm_t
  */
-SchedulingAlgorithm_t getSchedulerAlgorithm(char *algorithmName);
+SchedulingAlgorithm_t getSchedulerAlgorithm(char *algorithmName)
+{
+    if (strcmp(algorithmName, "SJF") == 0)
+        return SchedulingAlgorithm_SJF;
+
+    if (strcmp(algorithmName, "HPF") == 0)
+        return SchedulingAlgorithm_HPF;
+
+    if (strcmp(algorithmName, "RR") == 0)
+        return SchedulingAlgorithm_RR;
+
+    if (strcmp(algorithmName, "MLFL") == 0)
+        return SchedulingAlgorithm_MLFL;
+
+    return 0;
+}
 
 int main(int argc, char *argv[])
 {
