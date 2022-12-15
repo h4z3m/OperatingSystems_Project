@@ -148,6 +148,17 @@ int calculateAverageWeightedTATime(ProcessControlBlock *pcb)
 {
     return ((pcb->finishTime - pcb->arrivalTime) / pcb->executionTime);
 }
+int calculateAverageWaitingTime(ProcessControlBlock *processInfoArray[])
+{
+    // how to get size
+    int size = 100;
+    int sum = 0;
+    for (int i = 0; i < size; i++)
+    {
+        sum = sum + ((processInfoArray[i]->finishTime - processInfoArray[i]->arrivalTime) - processInfoArray[i]->executionTime);
+    }
+    return sum / size;
+}
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
