@@ -38,12 +38,12 @@ void generateSchedulerPerf(ProcessControlBlock *processInfoArray[]);
  *
  * @param pcb
  */
-void saveProcessState(ProcessControlBlock *pcb){}
-
-void scheduler_RR(char quantum){}
-void scheduler_HPF(){}
-void scheduler_SJF(){}
-void scheduler_MLFL(){}
+void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority, ProcessState state)
+{
+    pcb->remainingTime = remainingTime;
+    pcb->priority = priority;
+    pcb->state = state;
+}
 
 void SIGUSR1_Handler(){}
 void SIGUSR2_Handler(){}

@@ -15,14 +15,16 @@ ProcessControlBlock *createProcess(
     int pid,
     int arrivalTime,
     int executionTime,
-    int memSize)
+    // int memSize,
+    int priority)
 {
     ProcessControlBlock *newProcess = (ProcessControlBlock *)malloc(
         sizeof(ProcessControlBlock));
     newProcess->PID = pid;
     newProcess->arrivalTime = arrivalTime;
     newProcess->executionTime = executionTime;
-    newProcess->memSize = memSize;
+    // newProcess->memSize = memSize;
+    newProcess->priority = priority;
     return newProcess;
 }
 
@@ -32,7 +34,94 @@ ProcessControlBlock *createProcess(
  * @param fileName
  * @param processInfoArray
  */
-void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[]);
+void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
+{
+    FILE *ptr = fopen(fileName, "r");
+    char ch;
+    int ch_;
+    bool isReadingComment = false;
+    int states = 0;
+    int inc = 1;
+    int input = 0;
+    int i = -1;
+
+    int id = 0;
+    int arrival, runtime, priority;
+
+    if (NULL == ptr)
+    {
+        printf("file can't be opened \n");
+        return;
+    }
+
+    printf("content of this file are \n");
+
+    do
+    {
+        ch = fgetc(ptr);
+        ch_ = ch;
+
+        if (ch == '#')
+        {
+            isReadingComment = true;
+        }
+
+        if (!isReadingComment)
+        {
+            if (ch_ == 32 || ch_ == 9)
+            {
+                inc = 1;
+
+                switch (states)
+                {
+                case 0:
+                    id = input;
+                    break;
+                case 1:
+                    arrival = input;
+                    break;
+                case 2:
+                    runtime = input;
+                    break;
+                case 3:
+                    priority = input;
+                    break;
+                }
+                input = 0;
+                states++;
+            }
+            else if (ch_ == 10)
+            {
+                if (i != -1)
+                    processInfoArray[i] = createProcess(id, arrival, runtime, input);
+
+                isReadingComment = false;
+                states = 0;
+                i++;
+                input = 0;
+                inc = 1;
+
+                id = priority = arrival = runtime = 0;
+            }
+            else
+            {
+
+                input = input * inc + (ch - 48);
+
+                inc = inc * 10;
+            }
+        }
+
+        if (ch_ == 10 && i == -1)
+        {
+            isReadingComment = false;
+            i++;
+        }
+
+    } while (ch != EOF);
+
+    fclose(ptr);
+}
 
 /**
  * @brief Get the Scheduler Algorithm object
@@ -40,8 +129,38 @@ void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[]);
  * @param algorithmName
  * @return SchedulingAlgorithm_t
  */
-SchedulingAlgorithm_t getSchedulerAlgorithm(char *algorithmName);
+SchedulingAlgorithm_t getSchedulerAlgorithm(char *algorithmName)
+{
+    if (strcmp(algorithmName, "SJF") == 0)
+        return SchedulingAlgorithm_SJF;
 
+    if (strcmp(algorithmName, "HPF") == 0)
+        return SchedulingAlgorithm_HPF;
+
+    if (strcmp(algorithmName, "RR") == 0)
+        return SchedulingAlgorithm_RR;
+
+    if (strcmp(algorithmName, "MLFL") == 0)
+        return SchedulingAlgorithm_MLFL;
+
+    return 0;
+}
+
+int calculateAverageWeightedTATime(ProcessControlBlock *pcb)
+{
+    return ((pcb->finishTime - pcb->arrivalTime) / pcb->executionTime);
+}
+int calculateAverageWaitingTime(ProcessControlBlock *processInfoArray[])
+{
+    // how to get size
+    int size = 100;
+    int sum = 0;
+    for (int i = 0; i < size; i++)
+    {
+        sum = sum + ((processInfoArray[i]->finishTime - processInfoArray[i]->arrivalTime) - processInfoArray[i]->executionTime);
+    }
+    return sum / size;
+}
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);

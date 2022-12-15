@@ -13,13 +13,14 @@ typedef struct
     int arrivalTime;   /* Arrival time of the process*/
     int executionTime; /* Total runtime of the process*/
     int memSize;       /* Total allocated space for the process (for phase 2)*/
+    int finishTime;    /* Finish time of the process*/
 
     /*** Changed only when the process starts for the first time ***/
     int startTime; /* Time at which the process STARTS execution*/
 
     /*** Changes during the process life-time***/
     int remainingTime;  /* Remaining time for the process to finish*/
-    char priority;      /* 0 : Highest, 10: Lowest*/
+    int priority;       /* 0 : Highest, 10: Lowest*/
     ProcessState state; /* Current process state*/
 
 } ProcessControlBlock;
