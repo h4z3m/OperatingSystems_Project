@@ -144,6 +144,10 @@ SchedulingAlgorithm_t getSchedulerAlgorithm(char *algorithmName)
     return 0;
 }
 
+int calculateAverageWeightedTATime(ProcessControlBlock *pcb)
+{
+    return ((pcb->finishTime - pcb->arrivalTime) / pcb->executionTime);
+}
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
