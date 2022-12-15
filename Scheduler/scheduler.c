@@ -38,12 +38,15 @@ void generateSchedulerPerf(ProcessControlBlock *processInfoArray[]);
  *
  * @param pcb
  */
-void saveProcessState(ProcessControlBlock *pcb);
+void saveProcessState(ProcessControlBlock *pcb){}
 
-void scheduler_RR(char quantum);
-void scheduler_HPF();
-void scheduler_SJF();
-void scheduler_MLFL();
+void scheduler_RR(char quantum){}
+void scheduler_HPF(){}
+void scheduler_SJF(){}
+void scheduler_MLFL(){}
+
+void SIGUSR1_Handler(){}
+void SIGUSR2_Handler(){}
 
 /**
  * @brief The scheduler which schedules which process needs to run and which to suspend.
@@ -79,6 +82,3 @@ int main(int argc, char *argv[])
 
     destroyClk(true);
 }
-
-void SIGUSR1_Handler();
-void SIGUSR2_Handler();

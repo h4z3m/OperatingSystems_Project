@@ -3,6 +3,8 @@
 /* Modify this file as needed*/
 int remainingtime;
 
+void SIGUSR1_Handler(){}
+void SIGUSR2_Handler(){}
 /**
  * @brief This file simulates the process which needs to be CPU bound.
  * It runs for some time depending on the algorithm then gives back control to the
@@ -30,5 +32,3 @@ int main(int agrc, char *argv[])
     return 0;
 }
 
-void SIGUSR1_Handler();
-void SIGUSR2_Handler();

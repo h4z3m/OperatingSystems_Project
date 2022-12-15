@@ -1,17 +1,17 @@
 #ifndef DATA_STRUCTURES_H
 #define DATA_STRUCTURES_H
 typedef short bool;
-typedef struct
+typedef struct 
 {
     void *dataPtr;
-    Node *nextNode;
-} Node;
+    struct Node *nextNode;
+}Node;
 
 typedef struct
 {
     void *dataPtr;
-    Node *nextNode;
     int priority;
+    struct Prio_Node *nextNode;
 } Prio_Node;
 
 typedef struct
@@ -35,7 +35,11 @@ typedef struct
 } multiLevelQueue;
 
 /* Queue */
-queue *createQueue();
+queue *createQueue(){
+    Node *p =(Node*) malloc(sizeof(Node));
+    p->dataPtr=(void*)(0);
+    
+}
 bool isEmpty(queue *q);
 void enqueue(queue *q, void *dataPtr);
 Node *peek(queue *q);
