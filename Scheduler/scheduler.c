@@ -38,7 +38,12 @@ void generateSchedulerPerf(ProcessControlBlock *processInfoArray[]);
  *
  * @param pcb
  */
-void saveProcessState(ProcessControlBlock *pcb);
+void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority, ProcessState state)
+{
+    pcb->remainingTime = remainingTime;
+    pcb->priority = priority;
+    pcb->state = state;
+}
 
 void scheduler_RR(char quantum);
 void scheduler_HPF();
