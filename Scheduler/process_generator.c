@@ -176,20 +176,20 @@ int main(int argc, char *argv[])
     int x = getClk();
     printf("Current Time is %d\n", x);
     // TODO Generation Main Loop
-    for (size_t i = 0; i < count; i++)
-    {
+    // for (size_t i = 0; i < count; i++)
+    // {
 
-        if (new processe)
-        {
-            send msg_ctime
-        } /* code */
-    }
-    signal sched
+    //     if (new processe)
+    //     {
+    //         send msg_ctime
+    //     } /* code */
+    // }
+    // signal sched
 
-        // 5. Create a data structure for processes and provide it with its parameters.
-        // 6. Send the information to the scheduler at the appropriate time.
-        // 7. Clear clock resources
-        destroyClk(true);
+    // 5. Create a data structure for processes and provide it with its parameters.
+    // 6. Send the information to the scheduler at the appropriate time.
+    // 7. Clear clock resources
+    destroyClk(true);
 }
 
 void clearResources(int signum)
