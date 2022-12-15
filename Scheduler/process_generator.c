@@ -32,7 +32,94 @@ ProcessControlBlock *createProcess(
  * @param fileName
  * @param processInfoArray
  */
-void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[]);
+void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
+{
+    FILE *ptr = fopen(fileName, "r");
+    char ch;
+    int ch_;
+    bool isReadingComment = false;
+    int states = 0;
+    int inc = 1;
+    int input = 0;
+    int i = -1;
+
+    int id = 0;
+    int arrival, runtime, priority;
+
+    if (NULL == ptr)
+    {
+        printf("file can't be opened \n");
+        return;
+    }
+
+    printf("content of this file are \n");
+
+    do
+    {
+        ch = fgetc(ptr);
+        ch_ = ch;
+
+        if (ch == '#')
+        {
+            isReadingComment = true;
+        }
+
+        if (!isReadingComment)
+        {
+            if (ch_ == 32 || ch_ == 9)
+            {
+                inc = 1;
+
+                switch (states)
+                {
+                case 0:
+                    id = input;
+                    break;
+                case 1:
+                    arrival = input;
+                    break;
+                case 2:
+                    runtime = input;
+                    break;
+                case 3:
+                    priority = input;
+                    break;
+                }
+                input = 0;
+                states++;
+            }
+            else if (ch_ == 10)
+            {
+                if (i != -1)
+                    processInfoArray[i] = createProcess(id, arrival, runtime, input);
+
+                isReadingComment = false;
+                states = 0;
+                i++;
+                input = 0;
+                inc = 1;
+
+                id = priority = arrival = runtime = 0;
+            }
+            else
+            {
+
+                input = input * inc + (ch - 48);
+
+                inc = inc * 10;
+            }
+        }
+
+        if (ch_ == 10 && i == -1)
+        {
+            isReadingComment = false;
+            i++;
+        }
+
+    } while (ch != EOF);
+
+    fclose(ptr);
+}
 
 /**
  * @brief Get the Scheduler Algorithm object
