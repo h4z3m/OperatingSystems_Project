@@ -10,6 +10,7 @@ typedef struct
 {
     /*** Unchanged during execution ***/
     int PID;           /* Unique ID of the process*/
+    int inputPID;      /* Input ID of the process from text file*/
     int arrivalTime;   /* Arrival time of the process*/
     int executionTime; /* Total runtime of the process*/
     int memSize;       /* Total allocated space for the process (for phase 2)*/

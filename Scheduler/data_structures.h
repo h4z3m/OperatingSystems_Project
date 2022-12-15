@@ -41,7 +41,7 @@ typedef struct
 {
     int levels;
     Queue *queues[];
-} multiLevelQueue;
+} MultiLevelQueue;
 
 /* Queue */
 Queue *createQueue();
@@ -73,12 +73,12 @@ bool *dequeueCircular(CircularQueue *q, void *deleted_data);
 void destroyCircularQueue(CircularQueue *q);
 
 /* Multi level Queue*/
-multiLevelQueue *createMultiLevelQueue(int levels);
+MultiLevelQueue *createMultiLevelQueue(int levels);
 
-bool multiLevelisEmpty(multiLevelQueue *q);
-void enqueueMultiLevel(multiLevelQueue *q, void *dataPtr);
-bool *peekMultiLevel(multiLevelQueue *q, int level);
-bool *dequeueMultiLevel(multiLevelQueue *q, int level);
-void destroyMultiLevelQueue(multiLevelQueue *q);
+bool multiLevelisEmpty(MultiLevelQueue *q);
+void enqueueMultiLevel(MultiLevelQueue *q, void *dataPtr);
+bool *peekMultiLevel(MultiLevelQueue *q, int level);
+bool *dequeueMultiLevel(MultiLevelQueue *q, int level);
+void destroyMultiLevelQueue(MultiLevelQueue *q);
 
 #endif // DATA_STRUCTURES_H

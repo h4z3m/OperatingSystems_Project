@@ -131,16 +131,16 @@ void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
  */
 SchedulingAlgorithm_t getSchedulerAlgorithm(char *algorithmName)
 {
-    if (strcmp(algorithmName, "SJF") == 0)
+    if (strcmp(algorithmName, "1") == 0)
         return SchedulingAlgorithm_SJF;
 
-    if (strcmp(algorithmName, "HPF") == 0)
+    if (strcmp(algorithmName, "2") == 0)
         return SchedulingAlgorithm_HPF;
 
-    if (strcmp(algorithmName, "RR") == 0)
+    if (strcmp(algorithmName, "3") == 0)
         return SchedulingAlgorithm_RR;
 
-    if (strcmp(algorithmName, "MLFL") == 0)
+    if (strcmp(algorithmName, "4") == 0)
         return SchedulingAlgorithm_MLFL;
 
     return 0;
@@ -150,6 +150,7 @@ int calculateAverageWeightedTATime(ProcessControlBlock *pcb)
 {
     return ((pcb->finishTime - pcb->arrivalTime) / pcb->executionTime);
 }
+
 int calculateAverageWaitingTime(ProcessControlBlock *processInfoArray[])
 {
     // how to get size
@@ -161,6 +162,7 @@ int calculateAverageWaitingTime(ProcessControlBlock *processInfoArray[])
     }
     return sum / size;
 }
+
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
@@ -174,10 +176,20 @@ int main(int argc, char *argv[])
     int x = getClk();
     printf("Current Time is %d\n", x);
     // TODO Generation Main Loop
-    // 5. Create a data structure for processes and provide it with its parameters.
-    // 6. Send the information to the scheduler at the appropriate time.
-    // 7. Clear clock resources
-    destroyClk(true);
+    for (size_t i = 0; i < count; i++)
+    {
+
+        if (new processe)
+        {
+            send msg_ctime
+        } /* code */
+    }
+    signal sched
+
+        // 5. Create a data structure for processes and provide it with its parameters.
+        // 6. Send the information to the scheduler at the appropriate time.
+        // 7. Clear clock resources
+        destroyClk(true);
 }
 
 void clearResources(int signum)
