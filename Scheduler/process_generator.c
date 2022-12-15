@@ -15,14 +15,16 @@ ProcessControlBlock *createProcess(
     int pid,
     int arrivalTime,
     int executionTime,
-    int memSize)
+    // int memSize,
+    int priority)
 {
     ProcessControlBlock *newProcess = (ProcessControlBlock *)malloc(
         sizeof(ProcessControlBlock));
     newProcess->PID = pid;
     newProcess->arrivalTime = arrivalTime;
     newProcess->executionTime = executionTime;
-    newProcess->memSize = memSize;
+    // newProcess->memSize = memSize;
+    newProcess->priority = priority;
     return newProcess;
 }
 
