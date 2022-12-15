@@ -16,10 +16,11 @@ typedef struct
 
 typedef struct
 {
-    Node *front;
-    Node *back;
+    Node* front, rear;
+    unsigned capacity;
+    Node *nextNode
 
-} queue;
+} Queue;
 
 typedef struct
 {
@@ -31,16 +32,17 @@ typedef struct
 typedef struct
 {
     int levels;
-    queue *queues[];
+    Queue *queues[];
 } multiLevelQueue;
 
 /* Queue */
-queue *createQueue();
-bool isEmpty(queue *q);
-void enqueue(queue *q, void *dataPtr);
-Node *peek(queue *q);
-Node *dequeue(queue *q);
-void destroyQueue(queue *q);
+Queue *createQueue(unsigned capacity);
+int isEmpty(Queue *queue);
+void enqueue(Queue *queue, int item);
+int dequeue(Queue *queue);
+void destroyQueue(Queue *q);
+int front(Queue *queue);
+int rear(Queue *queue);
 
 /* Priority queue */
 priorityQueue *createPriorityQueue();
