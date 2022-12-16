@@ -1,13 +1,10 @@
-#include "data_structures.h"
+#include "../include/data_structures.h"
 
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-// function to create a queue
-// of given capacity.
-// It initializes size of queue as 0
-Queue *createQueue(unsigned capacity)
+Queue *createQueue()
 {
     Queue *queue = (Queue *)malloc(sizeof(Queue));
 
@@ -43,7 +40,6 @@ void enqueue(Queue *q, void *dataPtr)
     q->rear->nextNode = link;
     // Change rear to be the new link
     q->rear = link;
-    printf("%x enqueued to queue\n", dataPtr);
 }
 
 // Function to remove an item from queue.
@@ -65,12 +61,12 @@ bool dequeue(Queue *queue, void *out_data)
     return 1;
 }
 
-bool *peek(Queue *q, void *dataPtr)
+bool peek(Queue *q, void *dataPtr)
 {
     if (isEmpty(q))
         return 0;
-
-    dataPtr = q->front->dataPtr;
+    if (!dataPtr)
+        dataPtr = q->front->dataPtr;
     return 1;
 }
 
@@ -78,7 +74,7 @@ void destroyQueue(Queue *q)
 {
     while (q->front != NULL)
     {
-        dequeue(q->front, NULL);
+        dequeue(q, NULL);
     }
 }
 
@@ -137,7 +133,7 @@ void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority)
     }
 }
 
-bool *peekPriority(PriorityQueue *q, void *out_data)
+bool peekPriority(PriorityQueue *q, void *out_data)
 {
     if (priorityIsEmpty(q))
         return 0;
@@ -204,7 +200,7 @@ void enqueueCircular(CircularQueue *q, void *dataPtr)
     q->rear->nextNode = q->front;
 }
 
-bool *peekFront(CircularQueue *q, void *out_data)
+bool peekFront(CircularQueue *q, void *out_data)
 {
     if (circularIsEmpty(q))
         return 0;
@@ -213,7 +209,7 @@ bool *peekFront(CircularQueue *q, void *out_data)
     return 1;
 }
 
-bool *peekRear(CircularQueue *q, void *out_data)
+bool peekRear(CircularQueue *q, void *out_data)
 {
     if (circularIsEmpty(q))
         return 0;
@@ -222,7 +218,7 @@ bool *peekRear(CircularQueue *q, void *out_data)
     return 1;
 }
 
-bool *peekCircular(CircularQueue *q, void *out_data, unsigned int offset)
+bool peekCircular(CircularQueue *q, void *out_data, unsigned int offset)
 {
     if (offset == 0)
         return 0;
@@ -230,7 +226,7 @@ bool *peekCircular(CircularQueue *q, void *out_data, unsigned int offset)
     static Node *start = NULL;
 }
 
-bool *dequeueCircularFront(CircularQueue *q, void *out_data)
+bool dequeueCircularFront(CircularQueue *q, void *out_data)
 {
     if (q->front == NULL)
     {
@@ -257,7 +253,7 @@ bool *dequeueCircularFront(CircularQueue *q, void *out_data)
 
     return 1;
 }
-bool *dequeueCircular(CircularQueue *q, void *deleted_data)
+bool dequeueCircular(CircularQueue *q, void *deleted_data)
 {
     if (q->front == NULL)
     {
@@ -282,7 +278,7 @@ bool *dequeueCircular(CircularQueue *q, void *deleted_data)
     {
         q->front = NULL;
         free(curr);
-        return;
+        return 1;
     }
 
     // If more than one node, check if

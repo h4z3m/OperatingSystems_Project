@@ -1,26 +1,37 @@
-#if !defined(HEADERS_H)
+#ifndef HEADERS_H
 #define HEADERS_H
+
+#include <errno.h>
+#include <signal.h>
 #include <stdio.h> //if you don't use scanf/printf change this include
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/file.h>
 #include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/sem.h>
 #include <sys/msg.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
-#include <stdlib.h>
 #include <unistd.h>
-#include <signal.h>
-#include "data_structures.h"
-#include "types.h"
-#include <stdio.h>
-#include <string.h>
 typedef short bool;
 #define true 1
 #define false 0
 
 #define SHKEY 300
+#define MSGQKEY 400
+#define OUTPUT_MSGQKEY 500
+
+#define SCHEDULER_LOG_FILENAME ((const char *)"scheduler.log")
+#define SCHEDULER_PERF_FILENAME ((const char *)"scheduler.perf")
+
+#if DEBUG_MODE == 1
+#define DEBUG_PRINTF(message, ...) printf(message, ##__VA_ARGS__)
+#else
+#define DEBUG_PRINTF(message, ...)
+#endif
 
 ///==============================
 // don't mess with this variable//
@@ -32,13 +43,22 @@ int getClk()
     return *shmaddr;
 }
 
+int spawn_process(const char *proc_name, char *args[])
+{
+    int pid = fork();
+
+    if (pid == 0)
+        execv(proc_name, args);
+    return pid;
+}
+
 /*
  * All processes call this function at the beginning to establish communication between them and the clock module.
  * Again, remember that the clock is only emulation!
  */
 void initClk()
 {
-    int shmid = shmget(SHKEY, 4, IPC_CREAT | 0444);
+    int shmid = shmget(SHKEY, 4, 0444);
     while ((int)shmid == -1)
     {
         // Make sure that the clock exists

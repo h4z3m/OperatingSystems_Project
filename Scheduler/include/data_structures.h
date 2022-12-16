@@ -1,5 +1,6 @@
 #ifndef DATA_STRUCTURES_H
 #define DATA_STRUCTURES_H
+
 typedef short bool;
 typedef struct _node
 {
@@ -48,7 +49,7 @@ Queue *createQueue();
 
 bool isEmpty(Queue *q);
 void enqueue(Queue *q, void *dataPtr);
-bool *peek(Queue *q, void *dataPtr);
+bool peek(Queue *q, void *dataPtr);
 bool dequeue(Queue *queue, void *out_data);
 void destroyQueue(Queue *q);
 
@@ -57,7 +58,7 @@ PriorityQueue *createPriorityQueue();
 
 bool priorityIsEmpty(PriorityQueue *q);
 void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority);
-bool *peekPriority(PriorityQueue *q, void *out_data);
+bool peekPriority(PriorityQueue *q, void *out_data);
 bool dequeuePriority(PriorityQueue *q, void *out_data);
 void destroyPriorityQueue(PriorityQueue *q);
 
@@ -66,10 +67,10 @@ CircularQueue *createCircularQueue();
 
 bool circularIsEmpty(CircularQueue *q);
 void enqueueCircular(CircularQueue *q, void *dataPtr);
-bool *peekFront(CircularQueue *q, void *out_data);
-bool *peekRear(CircularQueue *q, void *out_data);
-bool *dequeueCircularFront(CircularQueue *q, void *out_data);
-bool *dequeueCircular(CircularQueue *q, void *deleted_data);
+bool peekFront(CircularQueue *q, void *out_data);
+bool peekRear(CircularQueue *q, void *out_data);
+bool dequeueCircularFront(CircularQueue *q, void *out_data);
+bool dequeueCircular(CircularQueue *q, void *deleted_data);
 void destroyCircularQueue(CircularQueue *q);
 
 /* Multi level Queue*/
@@ -77,8 +78,8 @@ MultiLevelQueue *createMultiLevelQueue(int levels);
 
 bool multiLevelisEmpty(MultiLevelQueue *q);
 void enqueueMultiLevel(MultiLevelQueue *q, void *dataPtr);
-bool *peekMultiLevel(MultiLevelQueue *q, int level);
-bool *dequeueMultiLevel(MultiLevelQueue *q, int level);
+bool peekMultiLevel(MultiLevelQueue *q, int level);
+bool dequeueMultiLevel(MultiLevelQueue *q, int level);
 void destroyMultiLevelQueue(MultiLevelQueue *q);
 
 #endif // DATA_STRUCTURES_H

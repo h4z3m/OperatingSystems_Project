@@ -1,9 +1,12 @@
+#ifndef TYPES_H
+#define TYPES_H
 
 typedef enum
 {
     ProcessState_Ready,
     ProcessState_Blocked,
-    ProcessState_Running
+    ProcessState_Running,
+    ProcessState_Finished
 } ProcessState;
 
 typedef struct
@@ -26,11 +29,19 @@ typedef struct
 
 } ProcessControlBlock;
 
+struct msgbuf
+{
+    long mtype;
+    ProcessControlBlock pcb;
+};
+
 typedef enum
 {
-    SchedulingAlgorithm_SJF, /* Shortest Job First*/
-    SchedulingAlgorithm_HPF, /* Highest Priority First*/
-    SchedulingAlgorithm_RR,  /* Round Robin*/
-    SchedulingAlgorithm_MLFL /* Multi-Level Feedback Loop*/
+    SchedulingAlgorithm_SJF = 1, /* Shortest Job First*/
+    SchedulingAlgorithm_HPF,     /* Highest Priority First*/
+    SchedulingAlgorithm_RR,      /* Round Robin*/
+    SchedulingAlgorithm_MLFL     /* Multi-Level Feedback Loop*/
 
 } SchedulingAlgorithm_t;
+
+#endif

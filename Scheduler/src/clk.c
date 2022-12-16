@@ -5,7 +5,7 @@
  * It is not a real part of the operating system!
  */
 
-#include "headers.h"
+#include "../include/headers.h"
 
 int shmid;
 
@@ -20,10 +20,12 @@ void cleanup(int signum)
 /* This file represents the system clock for ease of calculations */
 int main(int argc, char *argv[])
 {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     printf("Clock Starting...\n");
     signal(SIGINT, cleanup);
     int clk = 0;
-    //Create shared memory for one integer variable 4 bytes
+    // Create shared memory for one integer variable 4 bytes
     shmid = shmget(SHKEY, 4, IPC_CREAT | 0644);
     if ((long)shmid == -1)
     {
@@ -37,6 +39,7 @@ int main(int argc, char *argv[])
         exit(-1);
     }
     *shmaddr = clk; /* Initialize shared memory */
+    sleep(5);
     while (1)
     {
         sleep(1);

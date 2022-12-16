@@ -1,4 +1,9 @@
-#include "headers.h"
+#include "../include/headers.h"
+#include "types.h"
+#include <string.h>
+
+/* Message queue ID between scheduler and process generator*/
+static int proc_msgq = 0;
 
 void clearResources(int);
 
@@ -11,18 +16,13 @@ void clearResources(int);
  * @param memSize
  * @return ProcessControlBlock*
  */
-ProcessControlBlock *createProcess(
-    int pid,
-    int arrivalTime,
-    int executionTime,
-    // int memSize,
-    int priority)
+ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime /*,int memSize*/, int priority)
 {
     ProcessControlBlock *newProcess = (ProcessControlBlock *)malloc(
         sizeof(ProcessControlBlock));
-    newProcess->PID = pid;
+    newProcess->inputPID = pid;
     newProcess->arrivalTime = arrivalTime;
-    newProcess->executionTime = executionTime;
+    newProcess->executionTime = newProcess->remainingTime = executionTime;
     // newProcess->memSize = memSize;
     newProcess->priority = priority;
     return newProcess;
@@ -50,11 +50,9 @@ void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
 
     if (NULL == ptr)
     {
-        printf("file can't be opened \n");
+        DEBUG_PRINTF("[PROCGEN]File can't be opened.\n");
         return;
     }
-
-    printf("content of this file are \n");
 
     do
     {
@@ -126,21 +124,21 @@ void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
 /**
  * @brief Get the Scheduler Algorithm object
  *
- * @param algorithmName
+ * @param algorithmNum
  * @return SchedulingAlgorithm_t
  */
-SchedulingAlgorithm_t getSchedulerAlgorithm(char *algorithmName)
+SchedulingAlgorithm_t getSchedulerAlgorithm(char algorithmNum)
 {
-    if (strcmp(algorithmName, "1") == 0)
+    if (algorithmNum == '1')
         return SchedulingAlgorithm_SJF;
 
-    if (strcmp(algorithmName, "2") == 0)
+    if (algorithmNum == '2')
         return SchedulingAlgorithm_HPF;
 
-    if (strcmp(algorithmName, "3") == 0)
+    if (algorithmNum == '3')
         return SchedulingAlgorithm_RR;
 
-    if (strcmp(algorithmName, "4") == 0)
+    if (algorithmNum == '4')
         return SchedulingAlgorithm_MLFL;
 
     return 0;
@@ -163,31 +161,89 @@ int calculateAverageWaitingTime(ProcessControlBlock *processInfoArray[])
     return sum / size;
 }
 
+void sendMessage(ProcessControlBlock *pcbToSend)
+{
+    struct msgbuf buff;
+    buff.mtype = 1;
+    memcpy(&buff.pcb, pcbToSend, sizeof(ProcessControlBlock));
+    int ret = msgsnd(proc_msgq, &buff, sizeof(struct msgbuf) - sizeof(long), 0);
+    if (ret == -1)
+    {
+        perror("[PROCGEN] Error in message queue.");
+        exit(-1);
+    }
+}
+
 int main(int argc, char *argv[])
 {
+
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     signal(SIGINT, clearResources);
+
+    int process_count;
+    int RR_quantum = 0;
+    char *process_filename = argv[1];
+    if (argc == 6)
+        RR_quantum = atoi(argv[5]);
+
+    if (-1 == (proc_msgq = msgget(MSGQKEY, IPC_CREAT | 0666)))
+    {
+        perror("[PROCGEN] Could not get message queue...\n");
+        exit(-1);
+    }
+
+    DEBUG_PRINTF("[PROCGEN] Message queue ID = %d\n", proc_msgq);
     // TODO Initialization
     // 1. Read the input files.
+    ProcessControlBlock **process_array = (ProcessControlBlock **)malloc(sizeof(ProcessControlBlock *) * 100);
+    readInputFile(process_filename, process_array);
     // 2. Read the chosen scheduling algorithm and its parameters, if there are any from the argument list.
+    SchedulingAlgorithm_t sched = getSchedulerAlgorithm(*argv[3]) + '0';
     // 3. Initiate and create the scheduler and clock processes.
+    // Create clk process
+    int clk_pid = spawn_process("./clk.out", NULL);
+
+    // Create scheduler process
+    char sched_args[] = {sched, RR_quantum, '\0'};
+    int scheduler_pid = spawn_process("./clk.out", &sched_args);
+
     // 4. Use this function after creating the clock process to initialize clock.
     initClk();
     // To get time use this function.
-    int x = getClk();
-    printf("Current Time is %d\n", x);
-    // TODO Generation Main Loop
-    // for (size_t i = 0; i < count; i++)
-    // {
-
-    //     if (new processe)
-    //     {
-    //         send msg_ctime
-    //     } /* code */
-    // }
-    // signal sched
+    int prevClk = getClk();
+    printf("Current Time is %d\n", prevClk);
 
     // 5. Create a data structure for processes and provide it with its parameters.
+
     // 6. Send the information to the scheduler at the appropriate time.
+    struct msgbuf buff;
+    buff.mtype = 1;
+    for (;;)
+    {
+        int currClk = getClk();
+        if (currClk != prevClk)
+        {
+            DEBUG_PRINTF("[PROCGEN] Current Time is %d\n", currClk);
+
+            for (int i = 0; i < 10; i++)
+            {
+                if (process_array[i]->arrivalTime == currClk)
+                {
+                    // send to sched
+                    DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, currClk);
+                    sendMessage(process_array[i]);
+                }
+            }
+
+            // // Signal scheduler about the new messages in queue
+            // kill(scheduler_pid, SIGUSR1);
+
+            // Update prev clk
+            prevClk = getClk();
+        }
+    }
     // 7. Clear clock resources
     destroyClk(true);
 }
@@ -195,4 +251,7 @@ int main(int argc, char *argv[])
 void clearResources(int signum)
 {
     // TODO Clears all resources in case of interruption
+    destroyClk(true);
+    msgctl(proc_msgq, IPC_RMID, (struct msqid_ds *)0);
+    exit(0);
 }
