@@ -75,14 +75,14 @@ void printProcessInfo(ProcessControlBlock *pcb)
     DEBUG_PRINTF("********\n");
 }
 
-int receiveMessage(ProcessControlBlock **pcbToGet, long *mtype)
+int receiveMessage(ProcessControlBlock **pcbToGet)
 {
     struct msgbuf newMsg;
     *pcbToGet = (ProcessControlBlock *)malloc(sizeof(ProcessControlBlock));
     int ret = msgrcv(proc_msgq, (struct msgbuf *)&newMsg, sizeof(struct msgbuf) - sizeof(long), 0, IPC_NOWAIT);
     if (ret != -1)
     {
-        mtype = newMsg.mtype;
+        // *mtype = newMsg.mtype;
         memcpy(*pcbToGet, &newMsg.pcb, sizeof(ProcessControlBlock));
     }
     return ret;
@@ -141,23 +141,8 @@ void logScheduler()
     exit(0);
 }
 
-void startProcess(int startTime, ProcessControlBlock *pcb)
-{
-    pcb->startTime = getClk();
-    saveProcessState(pcb, pcb->remainingTime, pcb->priority, ProcessState_Running, 0);
-    enq_processStartedStr(getClk(), pcb);
-}
+//
 
-void resumeProcess(int startTime, ProcessControlBlock *pcb)
-{
-}
-
-void stopProcess(int stopTime, ProcessControlBlock *pcb)
-{
-}
-void endProcess(int finishTime, ProcessControlBlock *pcb)
-{
-}
 void scheduler_HPF()
 {
     PriorityQueue *HPF_Queue = createPriorityQueue();
@@ -179,43 +164,6 @@ void scheduler_SJF()
     // current exec pid = first element from queue
     // signal old process to stop
     // signal new process to start
-
-    RR_Queue = createCircularQueue();
-    finishedProcesses = createQueue();
-
-    ProcessControlBlock *currentPCB = NULL;
-    ProcessControlBlock *newPCB = NULL;
-
-    int prevClk = getClk();
-    int quantum_passed = 0;
-    int mtype = -1;
-    while (1)
-    {
-        while (getClk() == prevClk)
-            ;
-        prevClk = getClk();
-
-        /* New process has just arrived, put it at the back of queue*/
-        while (receiveMessage(&newPCB, &mtype) != -1)
-        {
-            if (mtype = 2)
-            {
-                // TODO clean up RR resources
-                return;
-            }
-            enqueueCircular(RR_Queue, newPCB);
-            newPCB->state == ProcessState_Ready;
-
-            /* Queue was empty, */
-            if (currentPCB == NULL)
-            {
-                currentPCB = newPCB;
-                currentPCB->startTime = getClk();
-                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
-                enq_processStartedStr(getClk(), currentPCB);
-            }
-        }
-    }
 }
 
 void scheduler_RR(unsigned int quantum)
@@ -234,35 +182,31 @@ void scheduler_RR(unsigned int quantum)
     ProcessControlBlock *currentPCB = NULL;
     ProcessControlBlock *newPCB = NULL;
 
-    int prevClk = getClk();
+    int prevClk = -1;
     int quantum_passed = 0;
-    int mtype = -1;
+    // int mtype = -1;
     while (1)
     {
-        while (getClk() == prevClk)
-            ;
+
         prevClk = getClk();
+        
+        printf("[SCHEDULER] Current time = %d\n", prevClk);
         if (!circularIsEmpty(RR_Queue))
             quantum_passed++;
 
         /* New process has just arrived, put it at the back of queue*/
-        while (receiveMessage(&newPCB, &mtype) != -1)
+        while (receiveMessage(&newPCB) != -1)
         {
-            if (mtype = 2)
-            {
-                // TODO clean up RR resources
-                return;
-            }
-            enqueueCircular(RR_Queue, newPCB);
-            newPCB->state == ProcessState_Ready;
 
+            enqueueCircular(RR_Queue, newPCB);
+            newPCB->state = ProcessState_Ready;
             /* Queue was empty, */
             if (currentPCB == NULL)
             {
                 currentPCB = newPCB;
-                currentPCB->startTime = getClk();
+                currentPCB->startTime = prevClk;
                 saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
-                enq_processStartedStr(getClk(), currentPCB);
+                enq_processStartedStr(prevClk, currentPCB);
             }
         }
 
@@ -276,12 +220,13 @@ void scheduler_RR(unsigned int quantum)
             // If process has just finished
             if (currentPCB->remainingTime == 0)
             {
+                printf("AAAAAAAAAAAAAAA\n");
                 /* Reset quantum passed as we will start a new process */
                 quantum_passed = 0;
 
-                saveProcessState(currentPCB, 0, currentPCB->priority, ProcessState_Finished, getClk());
+                saveProcessState(currentPCB, 0, currentPCB->priority, ProcessState_Finished, prevClk);
 
-                enq_processFinishedStr(getClk(), currentPCB);
+                enq_processFinishedStr(prevClk, currentPCB);
 
                 /* Remove the process from the queue */
                 dequeueCircularFront(RR_Queue, &currentPCB);
@@ -301,15 +246,14 @@ void scheduler_RR(unsigned int quantum)
                     // Process is starting for the first time
                     if (currentPCB->state == ProcessState_Ready)
                     {
-                        currentPCB->startTime = getClk();
-                        enq_processStartedStr(getClk(), currentPCB);
+                        currentPCB->startTime = prevClk;
+                        enq_processStartedStr(prevClk, currentPCB);
                     }
                     else
-                        enq_processResumedStr(getClk(), currentPCB);
+                        enq_processResumedStr(prevClk, currentPCB);
 
                     currentPCB->state = ProcessState_Running;
                 }
-                continue;
             }
         }
 
@@ -322,7 +266,7 @@ void scheduler_RR(unsigned int quantum)
 
                 /* Remove from queue then enqueue so it's at the back */
                 saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Blocked, 0);
-                enq_processStoppedStr(getClk(), currentPCB);
+                enq_processStoppedStr(prevClk, currentPCB);
 
                 /* Remove the process from the queue */
                 dequeueCircularFront(RR_Queue, &oldProc);
@@ -336,16 +280,20 @@ void scheduler_RR(unsigned int quantum)
                 // Process is starting for the first time
                 if (currentPCB->startTime == ProcessState_Ready)
                 {
-                    currentPCB->startTime = getClk();
-                    enq_processStartedStr(getClk(), currentPCB);
+                    currentPCB->startTime = prevClk;
+                    enq_processStartedStr(prevClk, currentPCB);
                 }
                 else
-                    enq_processResumedStr(getClk(), currentPCB);
+                    enq_processResumedStr(prevClk, currentPCB);
             }
             /* Reset quantum passed as we will start a new process */
             quantum_passed = 0;
         }
+
+        while (getClk() == prevClk)
+            ;
     }
+    DEBUG_PRINTF("FINISHED\n");
 }
 
 void scheduler_MLFL() {}
@@ -387,23 +335,27 @@ void getProcessMessageQueue()
  */
 int main(int argc, char *argv[])
 {
+    initClk();
+    getProcessMessageQueue();
+    outputQueue = createQueue();
 
+    scheduler_RR(4);
+
+    sleep(1);
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
     signal(SIGINT, SIGINT_Handler);
     signal(SIGUSR1, newProcess_Handler);
 
-    initClk();
-
     DEBUG_PRINTF("[SCHEDULER] Scheduler started...\n");
-    getProcessMessageQueue();
-    // Initialize output queue
-    outputQueue = createQueue();
-    // scheduler_RR(4);
 
+    // Initialize output queue
     schedAlgorithm = atoi(argv[1]);
     int RR_quantum = atoi(argv[2]);
+    // printf("RR = %d,Sched=%d", RR_quantum, schedAlgorithm);
+
+    // schedAlgo = *argv[1];
     // TODO: implement the scheduler.
     switch (schedAlgorithm)
     {
@@ -411,7 +363,6 @@ int main(int argc, char *argv[])
         scheduler_HPF();
         break;
     case SchedulingAlgorithm_RR:
-        scheduler_RR(RR_quantum);
         break;
     case SchedulingAlgorithm_SJF:
         scheduler_SJF();

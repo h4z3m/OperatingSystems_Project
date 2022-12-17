@@ -166,12 +166,12 @@ int calculateAverageWaitingTime(ProcessControlBlock *processInfoArray[])
     return sum / size;
 }
 
-int sendMessage(ProcessControlBlock *pcbToSend, long mtype)
+int sendMessage(ProcessControlBlock *pcbToSend)
 {
     struct msgbuf buff;
-    buff.mtype = mtype;
+    buff.mtype = 1;
     memcpy(&buff.pcb, pcbToSend, sizeof(ProcessControlBlock));
-    int ret = msgsnd(proc_msgq, &buff, sizeof(struct msgbuf) - sizeof(long), 0);
+    int ret = msgsnd(proc_msgq, &buff, sizeof(struct msgbuf) - sizeof(long), IPC_NOWAIT);
     if (ret == -1)
     {
         perror("[PROCGEN] Error in message queue.");
@@ -189,7 +189,7 @@ int main(int argc, char *argv[])
 
     signal(SIGINT, clearResources);
 
-    int RR_quantum = 0;
+    int RR_quantum;
     char *process_filename = argv[1];
     if (argc == 6)
         RR_quantum = atoi(argv[5]);
@@ -212,25 +212,25 @@ int main(int argc, char *argv[])
     // 3. Initiate and create the scheduler and clock processes.
     // Create clk process
 
-    int clk_pid = fork();
-    if (clk_pid == 0)
-        execl("./clk.out", NULL);
-
     // Create scheduler process
     char schede[5] = {0};
     char quantum[5] = {0};
 
-    sprintf(schede, "%c", sched);
-    sprintf(quantum, "%c", RR_quantum);
+    sprintf(schede, "%d", sched);
+    sprintf(quantum, "%d", RR_quantum);
 
     char *args[] = {"./scheduler.out", schede, quantum, NULL};
-
     int scheduler_pid = fork();
     if (scheduler_pid == 0)
         execv(args[0], args);
 
     // 4. Use this function after creating the clock process to initialize clock.
+
+    int clk_pid = fork();
+    if (clk_pid == 0)
+        execl("./clk.out", NULL);
     initClk();
+
     // To get time use this function.
     int prevClk = getClk();
     printf("Current Time is %d\n", prevClk);
@@ -242,34 +242,52 @@ int main(int argc, char *argv[])
     int processes_sent = 0;
     for (;;)
     {
+        while (prevClk == getClk())
+            ;
+        prevClk = getClk();
 
-        int currClk = getClk();
-        if (currClk != prevClk)
+        DEBUG_PRINTF("[PROCGEN] Current Time is %d\n", prevClk);
+
+        for (int i = 0; i < process_count; i++)
         {
-            DEBUG_PRINTF("[PROCGEN] Current Time is %d\n", currClk);
-
-            for (int i = 0; i < process_count; i++)
+            // if (processes_sent == process_count)
+            // {
+            //     sendMessage(process_array[i], 2);
+            //     raise(SIGINT);
+            // }
+            if (process_array[i]->arrivalTime == prevClk)
             {
-                if (processes_sent == process_count)
-                {
-                    sendMessage(process_array[i], 2);
-                    raise(SIGINT);
-                }
-                if (process_array[i]->arrivalTime == currClk)
-                {
-                    // send to sched
-                    DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, currClk);
-                    sendMessage(process_array[i], 1);
-                    processes_sent++;
-                }
+                // send to sched
+                DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, prevClk);
+
+                sendMessage(process_array[i]);
+                DEBUG_PRINTF("[PROCGEN] after sending %d\n", getClk());
+
+                // struct msgbuf buff;
+                // buff.mtype = 1;
+                // buff.pcb.arrivalTime = process_array[i]->arrivalTime;
+                // buff.pcb.inputPID = process_array[i]->inputPID;
+                // buff.pcb.executionTime = process_array[i]->executionTime;
+                // buff.pcb.remainingTime = process_array[i]->remainingTime;
+                // buff.pcb.state = process_array[i]->state;
+                // buff.pcb.memSize = process_array[i]->memSize;
+                // buff.pcb.priority = process_array[i]->priority;
+                // int ret = msgsnd(proc_msgq, &buff, sizeof(struct msgbuf) - sizeof(long), IPC_NOWAIT);
+                // if (ret == -1)
+                // {
+                //     perror("[PROCGEN] Error in message queue.");
+                //     exit(-1);
+                // }
+                // return ret;
+
+                // processes_sent++;
             }
-
-            // // Signal scheduler about the new messages in queue
-            // kill(scheduler_pid, SIGUSR1);
-
-            // Update prev clk
-            prevClk = getClk();
         }
+
+        // // Signal scheduler about the new messages in queue
+        // kill(scheduler_pid, SIGUSR1);
+
+        // Update prev clk
     }
     // 7. Clear clock resources
     destroyClk(true);
