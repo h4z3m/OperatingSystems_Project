@@ -200,7 +200,6 @@ void scheduler_SJF()
 
             /* Enqueue new process, priority = execution time*/
             enqueuePriority(SJF_Queue, newPCB, (newPCB->executionTime) * (-1));
-            printProcessInfo(newPCB);
             newPCB->state = ProcessState_Ready;
             /* Queue was empty, */
             if (currentPCB == NULL)
@@ -216,7 +215,7 @@ void scheduler_SJF()
 
         }
 
-        if (priorityIsEmpty(SJF_Queue))
+        if (currentPCB == NULL)
             idle_cycles++;
         else
         {
@@ -229,9 +228,7 @@ void scheduler_SJF()
                                  currentPCB->priority,
                                  ProcessState_Finished, currClk);
                 output_processFinishedStr(currClk, currentPCB);
-                DEBUG_PRINTF("[SCHED] removing node\n");
                 removeNodePriority(SJF_Queue, (void **)&currentPCB);
-                DEBUG_PRINTF("[SCHED] removednode\n");
 
                 currentPCB = NULL;
 

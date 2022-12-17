@@ -180,7 +180,6 @@ void removeNodePriority(PriorityQueue *q, void **dataToDelete)
     {
         deletedNode = q->front;
         q->front = q->front->nextNode;
-        printf("=======deleted data = %d", ((ProcessControlBlock *)*dataToDelete)->inputPID);
         free(deletedNode);
         return;
     }
@@ -192,7 +191,6 @@ void removeNodePriority(PriorityQueue *q, void **dataToDelete)
         {
 
             previous->nextNode = deletedNode->nextNode;
-            printf("=======deleted data = %d", ((ProcessControlBlock *)*dataToDelete)->inputPID);
             free(deletedNode);
             return;
         }
