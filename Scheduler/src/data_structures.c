@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/************************************************* Queue *************************************************/
 Queue *createQueue()
 {
     Queue *queue = (Queue *)malloc(sizeof(Queue));
@@ -23,7 +24,7 @@ bool isEmpty(Queue *queue)
 // It changes rear and size
 void enqueue(Queue *q, void *dataPtr)
 {
-    Node *link = malloc(sizeof(Node));
+    Node *link = (Node *)malloc(sizeof(Node));
     link->dataPtr = dataPtr;
     link->nextNode = NULL;
     // Empty queue,
@@ -35,6 +36,7 @@ void enqueue(Queue *q, void *dataPtr)
         return;
     }
     // Filled queue
+    q->capacity++;
 
     // Make the previous rear point to the newly created node
     q->rear->nextNode = link;
@@ -57,27 +59,29 @@ bool dequeue(Queue *queue, void **out_data)
     *out_data = deqNode->dataPtr;
 
     free(deqNode);
+    queue->capacity--;
+
     return 1;
 }
 
-bool peek(Queue *q, void *dataPtr)
+bool peek(Queue *q, void **dataPtr)
 {
     if (isEmpty(q))
         return 0;
-    if (!dataPtr)
-        dataPtr = q->front->dataPtr;
+    *dataPtr = q->front->dataPtr;
     return 1;
 }
 
 void destroyQueue(Queue *q)
 {
+    void *temp;
     while (q->front != NULL)
     {
-        dequeue(q, NULL);
+        dequeue(q, &temp);
     }
 }
 
-/* Priority Queue */
+/************************************************* Priority Queue *************************************************/
 PriorityQueue *createPriorityQueue()
 {
     PriorityQueue *pqueue = (PriorityQueue *)malloc(sizeof(PriorityQueue));
@@ -98,6 +102,8 @@ void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority)
 
     // Create new Node
     PrioNode *temp = (PrioNode *)malloc(sizeof(PrioNode));
+    temp->dataPtr = dataPtr;
+    q->capacity++;
     if (!q->front)
     {
         q->front = temp;
@@ -132,12 +138,12 @@ void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority)
     }
 }
 
-bool peekPriority(PriorityQueue *q, void *out_data)
+bool peekPriority(PriorityQueue *q, void **out_data)
 {
     if (priorityIsEmpty(q))
         return 0;
 
-    out_data = q->front->dataPtr;
+    *out_data = q->front->dataPtr;
     return 1;
 }
 
@@ -148,14 +154,14 @@ bool dequeuePriority(PriorityQueue *q, void **out_data)
         return 0;
 
     PrioNode *nodeToDeletePtr = q->front;
-    if (!out_data)
-        *out_data = q->front->dataPtr;
+    *out_data = q->front->dataPtr;
     q->front = q->front->nextNode;
     // Queue is not empty; remove front
     if (nodeToDeletePtr == q->rear) // Special case: last node in the queue
         q->rear = NULL;
     // Free memory reserved for the dequeued node
     free(nodeToDeletePtr);
+    q->capacity--;
     return 1;
 }
 
@@ -164,14 +170,14 @@ void destroyPriorityQueue(PriorityQueue *q)
     void *temp;
 
     // Free (Dequeue) all nodes in the queue
-    while (dequeuePriority(q, temp))
+    while (dequeuePriority(q, &temp))
     {
         if (temp)
             free(temp);
     }
 }
 
-/* Circular Queue*/
+/************************************************* Circular Queue *************************************************/
 CircularQueue *createCircularQueue()
 {
 
@@ -189,6 +195,7 @@ bool circularIsEmpty(CircularQueue *q)
 void enqueueCircular(CircularQueue *q, void *dataPtr)
 {
     Node *temp = (Node *)malloc(sizeof(Node));
+    q->capacity++;
     temp->dataPtr = dataPtr;
 
     if (q->front == NULL)
@@ -214,8 +221,7 @@ bool peekRear(CircularQueue *q, void **out_data)
     if (circularIsEmpty(q))
         return 0;
 
-    if (!out_data)
-        *out_data = q->front->dataPtr;
+    *out_data = q->rear->dataPtr;
     return 1;
 }
 
@@ -238,8 +244,7 @@ bool dequeueCircularFront(CircularQueue *q, void **out_data)
     // If this is the last node to be deleted
     if (q->front == q->rear)
     {
-        if (!out_data)
-            *out_data = q->front->dataPtr;
+        *out_data = q->front->dataPtr;
         free(q->front);
         q->front = NULL;
         q->rear = NULL;
@@ -247,14 +252,16 @@ bool dequeueCircularFront(CircularQueue *q, void **out_data)
     else // There are more than one nodes
     {
         Node *temp = q->front;
-        out_data = temp->dataPtr;
+        *out_data = temp->dataPtr;
         q->front = q->front->nextNode;
         q->rear->nextNode = q->front;
         free(temp);
     }
+    q->capacity--;
 
     return 1;
 }
+
 bool dequeueCircular(CircularQueue *q, void *deleted_data)
 {
     if (q->front == NULL)
@@ -306,7 +313,20 @@ bool dequeueCircular(CircularQueue *q, void *deleted_data)
         prev->nextNode = curr->nextNode;
         free(curr);
     }
-
+    q->capacity--;
     return 1;
 }
-void destroyCircularQueue(CircularQueue *q);
+
+void destroyCircularQueue(CircularQueue *q)
+{
+    void *temp;
+
+    // Free (Dequeue) all nodes in the queue
+    while (dequeueCircularFront(q, &temp))
+    {
+        if (temp)
+            free(temp);
+    }
+}
+
+/************************************************* Multilevel Queue *************************************************/

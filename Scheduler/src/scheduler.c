@@ -23,7 +23,7 @@ static Queue *outputQueue = NULL;
 
 static Queue *finishedProcesses = NULL;
 /* Represents the scheduler type which is to run */
-static SchedulingAlgorithm_t schedAlgorithm = 0;
+static SchedulingAlgorithm_t schedAlgorithm = SchedulingAlgorithm_RR;
 
 static PriorityQueue *HPF_Queue = NULL;
 static PriorityQueue *SJF_Queue = NULL;
@@ -83,16 +83,24 @@ int receiveMessage(ProcessControlBlock **pcbToGet)
     if (ret != -1)
     {
         // *mtype = newMsg.mtype;
-        memcpy(*pcbToGet, &newMsg.pcb, sizeof(ProcessControlBlock));
+        // memcpy(*pcbToGet, &newMsg.pcb, sizeof(ProcessControlBlock));
+        (*pcbToGet)->arrivalTime = newMsg.pcb.arrivalTime;
+
+        (*pcbToGet)->inputPID = newMsg.pcb.inputPID;
+        (*pcbToGet)->executionTime = newMsg.pcb.executionTime;
+        (*pcbToGet)->remainingTime = newMsg.pcb.remainingTime;
+        (*pcbToGet)->state = newMsg.pcb.state;
+        (*pcbToGet)->memSize = newMsg.pcb.memSize;
+        (*pcbToGet)->priority = newMsg.pcb.priority;
     }
     return ret;
 }
 
 void enq_processStartedStr(int currTime, ProcessControlBlock *pcb)
 {
-    char *buffer = malloc(sizeof(char) * 200);
+    char *buffer = (char *)malloc(sizeof(char) * 100);
     int waitingTime = (pcb->startTime - pcb->arrivalTime);
-    snprintf(buffer, 200, "At time %d process %d started arr %d total %d remain %d wait %d\n",
+    snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tstarted arr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
              currTime, pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->remainingTime, waitingTime);
     enqueue(outputQueue, buffer);
     DEBUG_PRINTF("%s", buffer);
@@ -100,8 +108,8 @@ void enq_processStartedStr(int currTime, ProcessControlBlock *pcb)
 
 void enq_processStoppedStr(int currTime, ProcessControlBlock *pcb)
 {
-    char *buffer = malloc(sizeof(char) * 100);
-    snprintf(buffer, 100, "At time %d process %d stopped arr %d total %d remain %d wait 0\n",
+    char *buffer = (char *)malloc(sizeof(char) * 100);
+    snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tstopped arr\t%d\ttotal\t%d\tremain\t%d\twait\t0\n",
              currTime, pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->remainingTime);
     enqueue(outputQueue, buffer);
     DEBUG_PRINTF("%s", buffer);
@@ -109,9 +117,9 @@ void enq_processStoppedStr(int currTime, ProcessControlBlock *pcb)
 
 void enq_processResumedStr(int currTime, ProcessControlBlock *pcb)
 {
-    char *buffer = malloc(sizeof(char) * 100);
+    char *buffer = (char *)malloc(sizeof(char) * 100);
     int waitingTime = currTime - pcb->arrivalTime - pcb->remainingTime;
-    snprintf(buffer, 100, "At time %d process %d resumed arr %d total %d remain %d wait %d\n",
+    snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tresumed arr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
              currTime, pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->remainingTime, waitingTime);
     enqueue(outputQueue, buffer);
     DEBUG_PRINTF("%s", buffer);
@@ -119,11 +127,11 @@ void enq_processResumedStr(int currTime, ProcessControlBlock *pcb)
 
 void enq_processFinishedStr(int currTime, ProcessControlBlock *pcb)
 {
-    char *buffer = malloc(sizeof(char) * 100);
-    int waitingTime = (currTime - pcb->arrivalTime) - pcb->executionTime;
+    char *buffer = (char *)malloc(sizeof(char) * 100);
+    int waitingTime = (pcb->finishTime - pcb->arrivalTime) - pcb->executionTime;
     int TA = (pcb->finishTime - pcb->arrivalTime);
     float WTA = roundf(((float)TA / pcb->executionTime) * 100.0) / 100.0;
-    snprintf(buffer, 100, "At time %d process %d finished arr %d total %d remain %d wait %d TA %d WTA %.2f\n",
+    snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tfinished arr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\tTA\t%d WTA\t%.2f\n",
              currTime, pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->remainingTime, waitingTime, TA, WTA);
     enqueue(outputQueue, buffer);
     DEBUG_PRINTF("%s", buffer);
@@ -133,15 +141,13 @@ void logScheduler()
 {
     FILE *logfile = fopen(SCHEDULER_LOG_FILENAME, "w");
     char *line = NULL;
-    while (dequeue(outputQueue, &line))
+    while (dequeue(outputQueue, (void **)&line))
     {
         fputs(line, logfile);
     }
     fclose(logfile);
     exit(0);
 }
-
-//
 
 void scheduler_HPF()
 {
@@ -164,6 +170,84 @@ void scheduler_SJF()
     // current exec pid = first element from queue
     // signal old process to stop
     // signal new process to start
+
+    SJF_Queue = createPriorityQueue();
+    ProcessControlBlock *currentPCB = (NULL);
+    ProcessControlBlock *newPCB = (ProcessControlBlock *)malloc(sizeof(ProcessControlBlock));
+
+    int currClk = -1;
+
+    for (;;)
+    {
+
+        currClk = getClk();
+        DEBUG_PRINTF("[SCHED] Current Time is %d\n", currClk);
+
+        /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
+        while (receiveMessage(&newPCB) != -1)
+        {
+            /* Enqueue new process, priority = execution time*/
+            enqueuePriority(SJF_Queue, newPCB, -newPCB->executionTime);
+            newPCB->state = ProcessState_Ready;
+            /* Queue was empty, */
+            if (currentPCB == NULL)
+            {
+                currentPCB = newPCB;
+                currentPCB->startTime = currClk;
+                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                enq_processStartedStr(currClk, currentPCB);
+            }
+            else if (currentPCB->remainingTime > newPCB->remainingTime)
+            {
+                /* Save process state */
+                ProcessControlBlock *oldProc = currentPCB;
+                saveProcessState(oldProc,
+                                 oldProc->remainingTime,
+                                 oldProc->priority,
+                                 ProcessState_Blocked, 0);
+                enq_processStoppedStr(currClk, oldProc);
+
+                /* Run next process for the first time*/
+                currentPCB = newPCB;
+                currentPCB->startTime = currClk;
+                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                enq_processStartedStr(currClk, currentPCB);
+            }
+        }
+
+        if (priorityIsEmpty(SJF_Queue))
+            idle_cycles++;
+        else
+        {
+            /* Decrement current process time */
+            currentPCB->remainingTime--;
+            if (currentPCB->remainingTime == 0)
+            {
+                /* Save process state and dequeue it*/
+                ProcessControlBlock *oldProc;
+                dequeuePriority(SJF_Queue, (void **)&oldProc);
+                saveProcessState(currentPCB,
+                                 0,
+                                 currentPCB->priority,
+                                 ProcessState_Finished, currClk);
+                enq_processFinishedStr(currClk, oldProc);
+                currentPCB = NULL;
+
+                /* Get new process(if exists) from queue as the current is finished*/
+                if (peekPriority(SJF_Queue, (void **)&currentPCB))
+                {
+                    currentPCB->startTime = currClk;
+                    saveProcessState(currentPCB,
+                                     currentPCB->remainingTime,
+                                     currentPCB->priority,
+                                     ProcessState_Running, 0);
+                    enq_processStartedStr(currClk, currentPCB);
+                }
+            }
+        }
+        while (currClk == getClk())
+            ;
+    }
 }
 
 void scheduler_RR(unsigned int quantum)
@@ -183,16 +267,14 @@ void scheduler_RR(unsigned int quantum)
     ProcessControlBlock *newPCB = NULL;
 
     int prevClk = -1;
-    int quantum_passed = 0;
+    unsigned int quantum_passed = 0;
     // int mtype = -1;
     while (1)
     {
+        while (getClk() == prevClk)
+            ;
 
         prevClk = getClk();
-        
-        printf("[SCHEDULER] Current time = %d\n", prevClk);
-        if (!circularIsEmpty(RR_Queue))
-            quantum_passed++;
 
         /* New process has just arrived, put it at the back of queue*/
         while (receiveMessage(&newPCB) != -1)
@@ -210,6 +292,9 @@ void scheduler_RR(unsigned int quantum)
             }
         }
 
+        if (!circularIsEmpty(RR_Queue))
+            quantum_passed++;
+
         if (circularIsEmpty(RR_Queue))
             idle_cycles++;
         else
@@ -218,9 +303,8 @@ void scheduler_RR(unsigned int quantum)
             currentPCB->remainingTime--;
 
             // If process has just finished
-            if (currentPCB->remainingTime == 0)
+            if (currentPCB->remainingTime = 0)
             {
-                printf("AAAAAAAAAAAAAAA\n");
                 /* Reset quantum passed as we will start a new process */
                 quantum_passed = 0;
 
@@ -289,9 +373,6 @@ void scheduler_RR(unsigned int quantum)
             /* Reset quantum passed as we will start a new process */
             quantum_passed = 0;
         }
-
-        while (getClk() == prevClk)
-            ;
     }
     DEBUG_PRINTF("FINISHED\n");
 }
@@ -335,27 +416,23 @@ void getProcessMessageQueue()
  */
 int main(int argc, char *argv[])
 {
+    DEBUG_PRINTF("[SCHEDULER] Scheduler started...\n");
+
     initClk();
-    getProcessMessageQueue();
-    outputQueue = createQueue();
 
-    scheduler_RR(4);
-
-    sleep(1);
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
     signal(SIGINT, SIGINT_Handler);
     signal(SIGUSR1, newProcess_Handler);
 
-    DEBUG_PRINTF("[SCHEDULER] Scheduler started...\n");
-
     // Initialize output queue
-    schedAlgorithm = atoi(argv[1]);
-    int RR_quantum = atoi(argv[2]);
-    // printf("RR = %d,Sched=%d", RR_quantum, schedAlgorithm);
+    outputQueue = createQueue();
+    getProcessMessageQueue();
 
-    // schedAlgo = *argv[1];
+    schedAlgorithm = (SchedulingAlgorithm_t)atoi(argv[1]);
+    int RR_quantum;
+
     // TODO: implement the scheduler.
     switch (schedAlgorithm)
     {
@@ -363,6 +440,8 @@ int main(int argc, char *argv[])
         scheduler_HPF();
         break;
     case SchedulingAlgorithm_RR:
+        RR_quantum = atoi(argv[2]);
+        scheduler_RR(RR_quantum);
         break;
     case SchedulingAlgorithm_SJF:
         scheduler_SJF();
