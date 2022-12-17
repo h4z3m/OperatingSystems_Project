@@ -9,11 +9,13 @@ SCHED_ARGS=
 CC=gcc
 IDIR=../include
 CFLAGS=-Wall -g -I$(IDIR)
+LDFLAGS=-lm
 OBJDIR=../obj
 BINDIR=../bin
 OBJ = $(addprefix $(OBJDIR)/, $(patsubst %.c, %.o, $(wildcard *.c)))
 OBJ_PROC=$(OBJDIR)/data_structures.o $(OBJDIR)/process_generator.o
 OBJ_SCHED=$(OBJDIR)/data_structures.o $(OBJDIR)/scheduler.o
+OBJ_TEST=$(OBJDIR)/data_structures.o $(OBJDIR)/test.o
 
 ###### Rules ######
 
@@ -31,6 +33,8 @@ $(OBJDIR)/%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 #all: process_generator test_generator scheduler clk process
+test: $(OBJ_TEST)
+	$(CC) $(CFLAGS) -o $(BINDIR)/$@.out $^
 
 data_structures:
 	$(CC) $(CFLAGS) -o $@ $^
@@ -44,7 +48,7 @@ test_generator: $(OBJDIR)/test_generator.o
 	$(CC) $(CFLAGS) -o $(BINDIR)/$@.out $^
 
 scheduler: $(OBJ_SCHED)
-	$(CC) $(CFLAGS) -o $(BINDIR)/$@.out $^
+	$(CC) $(CFLAGS) -o $(BINDIR)/$@.out $^ $(LDFLAGS) 
 
 clk: $(OBJDIR)/clk.o
 	$(CC) $(CFLAGS) -o $(BINDIR)/$@.out $^

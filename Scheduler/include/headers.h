@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <math.h>
 typedef short bool;
 #define true 1
 #define false 0
@@ -27,6 +28,7 @@ typedef short bool;
 #define SCHEDULER_LOG_FILENAME ((const char *)"scheduler.log")
 #define SCHEDULER_PERF_FILENAME ((const char *)"scheduler.perf")
 
+#define DEBUG_MODE 1
 #if DEBUG_MODE == 1
 #define DEBUG_PRINTF(message, ...) printf(message, ##__VA_ARGS__)
 #else
@@ -41,15 +43,6 @@ int *shmaddr; //
 int getClk()
 {
     return *shmaddr;
-}
-
-int spawn_process(const char *proc_name, char *args[])
-{
-    int pid = fork();
-
-    if (pid == 0)
-        execv(proc_name, args);
-    return pid;
 }
 
 /*

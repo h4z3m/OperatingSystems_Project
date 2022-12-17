@@ -50,7 +50,7 @@ Queue *createQueue();
 bool isEmpty(Queue *q);
 void enqueue(Queue *q, void *dataPtr);
 bool peek(Queue *q, void *dataPtr);
-bool dequeue(Queue *queue, void *out_data);
+bool dequeue(Queue *queue, void **out_data);
 void destroyQueue(Queue *q);
 
 /* Priority Queue */
@@ -59,7 +59,7 @@ PriorityQueue *createPriorityQueue();
 bool priorityIsEmpty(PriorityQueue *q);
 void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority);
 bool peekPriority(PriorityQueue *q, void *out_data);
-bool dequeuePriority(PriorityQueue *q, void *out_data);
+bool dequeuePriority(PriorityQueue *q, void **out_data);
 void destroyPriorityQueue(PriorityQueue *q);
 
 /* Circular Queue*/
@@ -67,9 +67,9 @@ CircularQueue *createCircularQueue();
 
 bool circularIsEmpty(CircularQueue *q);
 void enqueueCircular(CircularQueue *q, void *dataPtr);
-bool peekFront(CircularQueue *q, void *out_data);
-bool peekRear(CircularQueue *q, void *out_data);
-bool dequeueCircularFront(CircularQueue *q, void *out_data);
+bool peekFront(CircularQueue *q, void **out_data);
+bool peekRear(CircularQueue *q, void **out_data);
+bool dequeueCircularFront(CircularQueue *q, void **out_data);
 bool dequeueCircular(CircularQueue *q, void *deleted_data);
 void destroyCircularQueue(CircularQueue *q);
 

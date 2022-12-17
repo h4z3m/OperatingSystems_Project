@@ -18,13 +18,14 @@ void clearResources(int);
  */
 ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime /*,int memSize*/, int priority)
 {
-    ProcessControlBlock *newProcess = (ProcessControlBlock *)malloc(
-        sizeof(ProcessControlBlock));
+    ProcessControlBlock *newProcess = (ProcessControlBlock *)calloc(
+        1, sizeof(ProcessControlBlock));
     newProcess->inputPID = pid;
     newProcess->arrivalTime = arrivalTime;
     newProcess->executionTime = newProcess->remainingTime = executionTime;
     // newProcess->memSize = memSize;
     newProcess->priority = priority;
+    newProcess->state = ProcessState_Ready;
     return newProcess;
 }
 
@@ -34,7 +35,7 @@ ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime /
  * @param fileName
  * @param processInfoArray
  */
-void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
+int readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
 {
     FILE *ptr = fopen(fileName, "r");
     char ch;
@@ -47,11 +48,12 @@ void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
 
     int id = 0;
     int arrival, runtime, priority;
+    int processCount = 0;
 
     if (NULL == ptr)
     {
-        DEBUG_PRINTF("[PROCGEN]File can't be opened.\n");
-        return;
+        DEBUG_PRINTF("[PROCGEN] File can't be opened.\n");
+        exit(-1);
     }
 
     do
@@ -91,8 +93,10 @@ void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
             else if (ch_ == 10)
             {
                 if (i != -1)
+                {
                     processInfoArray[i] = createProcess(id, arrival, runtime, input);
-
+                    processCount++;
+                }
                 isReadingComment = false;
                 states = 0;
                 i++;
@@ -119,6 +123,7 @@ void readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
     } while (ch != EOF);
 
     fclose(ptr);
+    return processCount;
 }
 
 /**
@@ -161,10 +166,10 @@ int calculateAverageWaitingTime(ProcessControlBlock *processInfoArray[])
     return sum / size;
 }
 
-void sendMessage(ProcessControlBlock *pcbToSend)
+int sendMessage(ProcessControlBlock *pcbToSend, long mtype)
 {
     struct msgbuf buff;
-    buff.mtype = 1;
+    buff.mtype = mtype;
     memcpy(&buff.pcb, pcbToSend, sizeof(ProcessControlBlock));
     int ret = msgsnd(proc_msgq, &buff, sizeof(struct msgbuf) - sizeof(long), 0);
     if (ret == -1)
@@ -172,9 +177,11 @@ void sendMessage(ProcessControlBlock *pcbToSend)
         perror("[PROCGEN] Error in message queue.");
         exit(-1);
     }
+    return ret;
 }
 
 int main(int argc, char *argv[])
+
 {
 
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -182,7 +189,6 @@ int main(int argc, char *argv[])
 
     signal(SIGINT, clearResources);
 
-    int process_count;
     int RR_quantum = 0;
     char *process_filename = argv[1];
     if (argc == 6)
@@ -195,19 +201,33 @@ int main(int argc, char *argv[])
     }
 
     DEBUG_PRINTF("[PROCGEN] Message queue ID = %d\n", proc_msgq);
-    // TODO Initialization
+
     // 1. Read the input files.
     ProcessControlBlock **process_array = (ProcessControlBlock **)malloc(sizeof(ProcessControlBlock *) * 100);
-    readInputFile(process_filename, process_array);
+    int process_count = readInputFile(process_filename, process_array);
+
     // 2. Read the chosen scheduling algorithm and its parameters, if there are any from the argument list.
-    SchedulingAlgorithm_t sched = getSchedulerAlgorithm(*argv[3]) + '0';
+    SchedulingAlgorithm_t sched = getSchedulerAlgorithm(*argv[3]);
+
     // 3. Initiate and create the scheduler and clock processes.
     // Create clk process
-    int clk_pid = spawn_process("./clk.out", NULL);
+
+    int clk_pid = fork();
+    if (clk_pid == 0)
+        execl("./clk.out", NULL);
 
     // Create scheduler process
-    char sched_args[] = {sched, RR_quantum, '\0'};
-    int scheduler_pid = spawn_process("./clk.out", &sched_args);
+    char schede[5] = {0};
+    char quantum[5] = {0};
+
+    sprintf(schede, "%c", sched);
+    sprintf(quantum, "%c", RR_quantum);
+
+    char *args[] = {"./scheduler.out", schede, quantum, NULL};
+
+    int scheduler_pid = fork();
+    if (scheduler_pid == 0)
+        execv(args[0], args);
 
     // 4. Use this function after creating the clock process to initialize clock.
     initClk();
@@ -218,22 +238,29 @@ int main(int argc, char *argv[])
     // 5. Create a data structure for processes and provide it with its parameters.
 
     // 6. Send the information to the scheduler at the appropriate time.
-    struct msgbuf buff;
-    buff.mtype = 1;
+
+    int processes_sent = 0;
     for (;;)
     {
+
         int currClk = getClk();
         if (currClk != prevClk)
         {
             DEBUG_PRINTF("[PROCGEN] Current Time is %d\n", currClk);
 
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < process_count; i++)
             {
+                if (processes_sent == process_count)
+                {
+                    sendMessage(process_array[i], 2);
+                    raise(SIGINT);
+                }
                 if (process_array[i]->arrivalTime == currClk)
                 {
                     // send to sched
                     DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, currClk);
-                    sendMessage(process_array[i]);
+                    sendMessage(process_array[i], 1);
+                    processes_sent++;
                 }
             }
 

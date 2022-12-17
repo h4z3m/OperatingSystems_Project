@@ -44,7 +44,7 @@ void enqueue(Queue *q, void *dataPtr)
 
 // Function to remove an item from queue.
 // It changes front and size
-bool dequeue(Queue *queue, void *out_data)
+bool dequeue(Queue *queue, void **out_data)
 {
     if (queue->front == NULL)
     {
@@ -54,8 +54,7 @@ bool dequeue(Queue *queue, void *out_data)
     Node *deqNode = queue->front;
     queue->front = queue->front->nextNode;
 
-    if (!out_data)
-        out_data = deqNode->dataPtr;
+    *out_data = deqNode->dataPtr;
 
     free(deqNode);
     return 1;
@@ -142,14 +141,15 @@ bool peekPriority(PriorityQueue *q, void *out_data)
     return 1;
 }
 
-bool dequeuePriority(PriorityQueue *q, void *out_data)
+bool dequeuePriority(PriorityQueue *q, void **out_data)
 {
 
     if (priorityIsEmpty(q))
         return 0;
 
     PrioNode *nodeToDeletePtr = q->front;
-    out_data = q->front->dataPtr;
+    if (!out_data)
+        *out_data = q->front->dataPtr;
     q->front = q->front->nextNode;
     // Queue is not empty; remove front
     if (nodeToDeletePtr == q->rear) // Special case: last node in the queue
@@ -183,7 +183,7 @@ CircularQueue *createCircularQueue()
 
 bool circularIsEmpty(CircularQueue *q)
 {
-    return (q->capacity == 0);
+    return (q->front == NULL);
 }
 
 void enqueueCircular(CircularQueue *q, void *dataPtr)
@@ -200,21 +200,22 @@ void enqueueCircular(CircularQueue *q, void *dataPtr)
     q->rear->nextNode = q->front;
 }
 
-bool peekFront(CircularQueue *q, void *out_data)
+bool peekFront(CircularQueue *q, void **out_data)
 {
     if (circularIsEmpty(q))
         return 0;
 
-    out_data = q->front->dataPtr;
+    *out_data = q->front->dataPtr;
     return 1;
 }
 
-bool peekRear(CircularQueue *q, void *out_data)
+bool peekRear(CircularQueue *q, void **out_data)
 {
     if (circularIsEmpty(q))
         return 0;
 
-    out_data = q->rear->dataPtr;
+    if (!out_data)
+        *out_data = q->front->dataPtr;
     return 1;
 }
 
@@ -226,7 +227,7 @@ bool peekCircular(CircularQueue *q, void *out_data, unsigned int offset)
     static Node *start = NULL;
 }
 
-bool dequeueCircularFront(CircularQueue *q, void *out_data)
+bool dequeueCircularFront(CircularQueue *q, void **out_data)
 {
     if (q->front == NULL)
     {
@@ -237,7 +238,8 @@ bool dequeueCircularFront(CircularQueue *q, void *out_data)
     // If this is the last node to be deleted
     if (q->front == q->rear)
     {
-        out_data = q->front->dataPtr;
+        if (!out_data)
+            *out_data = q->front->dataPtr;
         free(q->front);
         q->front = NULL;
         q->rear = NULL;

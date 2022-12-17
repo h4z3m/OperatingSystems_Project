@@ -20,8 +20,6 @@ void cleanup(int signum)
 /* This file represents the system clock for ease of calculations */
 int main(int argc, char *argv[])
 {
-    setvbuf(stdout, NULL, _IONBF, 0);
-    setvbuf(stderr, NULL, _IONBF, 0);
     printf("Clock Starting...\n");
     signal(SIGINT, cleanup);
     int clk = 0;
