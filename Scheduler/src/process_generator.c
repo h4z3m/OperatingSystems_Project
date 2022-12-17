@@ -7,15 +7,6 @@ static int proc_msgq = 0;
 
 void clearResources(int);
 
-/**
- * @brief Create a Process object
- *
- * @param pid
- * @param arrivalTime
- * @param executionTime
- * @param memSize
- * @return ProcessControlBlock*
- */
 ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime /*,int memSize*/, int priority)
 {
     ProcessControlBlock *newProcess = (ProcessControlBlock *)calloc(
@@ -29,12 +20,6 @@ ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime /
     return newProcess;
 }
 
-/**
- * @brief
- *
- * @param fileName
- * @param processInfoArray
- */
 int readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
 {
     FILE *ptr = fopen(fileName, "r");
@@ -126,12 +111,6 @@ int readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
     return processCount;
 }
 
-/**
- * @brief Get the Scheduler Algorithm object
- *
- * @param algorithmNum
- * @return SchedulingAlgorithm_t
- */
 SchedulingAlgorithm_t getSchedulerAlgorithm(char algorithmNum)
 {
     if (algorithmNum == '1')
@@ -149,11 +128,10 @@ SchedulingAlgorithm_t getSchedulerAlgorithm(char algorithmNum)
     return SchedulingAlgorithm_HPF;
 }
 
-
-int sendMessage(ProcessControlBlock *pcbToSend)
+int sendMessage(ProcessControlBlock *pcbToSend, long mtype)
 {
     struct msgbuf buff = {0};
-    buff.mtype = 1;
+    buff.mtype = mtype;
     // memcpy(&buff.pcb, pcbToSend, sizeof(ProcessControlBlock));
     buff.pcb.arrivalTime = pcbToSend->arrivalTime;
     buff.pcb.inputPID = pcbToSend->inputPID;
@@ -174,14 +152,12 @@ int sendMessage(ProcessControlBlock *pcbToSend)
 
 int main(int argc, char *argv[])
 
-
 {
 
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
     signal(SIGINT, clearResources);
-
     int RR_quantum;
     char *process_filename = argv[1];
     if (argc == 6)
@@ -212,8 +188,8 @@ int main(int argc, char *argv[])
     // sprintf(schede, "%d", sched);
     // sprintf(quantum, "%d", RR_quantum);
 
-    sprintf(schede, "1");
-    sprintf(quantum, "%d", RR_quantum);
+    sprintf(schede, "3");
+    sprintf(quantum, "%d", 4);
 
     char *args[] = {schedexec, schede, quantum, NULL};
 
@@ -247,27 +223,22 @@ int main(int argc, char *argv[])
 
             for (int i = 0; i < process_count; i++)
             {
-                /* code */
-                if (process_array[i]->arrivalTime == prevClk+1)
+                if (process_array[i]->arrivalTime == prevClk + 1)
                 {
-                    // send to sched
-                    DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, prevClk);
-                    
-                    sendMessage(process_array[i]);
-                    // DEBUG_PRINTF("[PROCGEN] after sending %d\n", getClk());
+                    /* Send to sched */
+                    DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, prevClk + 1);
+                    sendMessage(process_array[i], 1);
                     processes_sent++;
                 }
-                // if (processes_sent == process_count)
-                // {
-                //     raise(SIGINT);
-                // }
             }
             currClk = getClk();
         }
-        // 7. Clear clock resources
-    }
+        }
+
+    // 7. Clear clock resources
     destroyClk(true);
 }
+
 void clearResources(int signum)
 {
     // TODO Clears all resources in case of interruption

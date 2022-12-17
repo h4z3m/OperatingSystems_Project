@@ -2,6 +2,7 @@
 #include "../include/headers.h"
 #include "../include/types.h"
 #include <math.h>
+
 //  جاوب علي هذه الاسئلة و سوف تتصل بك هيفاء وهبي
 // TODO Handlers for each scheduling algorithm or universal handler?
 // TODO Who decrements process remaining time?
@@ -18,51 +19,59 @@ static int idle_cycles = 0;
 /* Represents the idle cycles, must be updated somewhere */
 static int total_cycles = 0;
 
-/* Message queue ID between scheduler and process generator*/
+/* Message queue ID between scheduler and process generator */
 static int proc_msgq = 0;
 
-/* Queue for output messages in scheduler.log*/
+/* Queue for output messages in scheduler.log */
 static Queue *outputQueue = NULL;
 
+/* Queue for finished processes, used in logging */
 static Queue *finishedProcesses = NULL;
 
 /* Represents the scheduler type which is to run */
 static SchedulingAlgorithm_t schedAlgorithm = SchedulingAlgorithm_RR;
 
+/* Scheduler queues */
 static PriorityQueue *HPF_Queue = NULL;
 static PriorityQueue *SJF_Queue = NULL;
 static MultiLevelQueue *MLVL_Queue = NULL;
-static CircularQueue *RR_Queue = NULL;
+static Queue *RR_Queue = NULL;
 
-int calculateAverageWeightedTATime(ProcessControlBlock *pcb)
+float calculateAverageWeightedTATime(Queue *processInfoQueue, int size)
 {
-    return ((pcb->finishTime - pcb->arrivalTime) / pcb->executionTime);
-}
-
-int calculateAverageWaitingTime(Queue *processInfoQueue, int size)
-{
-    int sum = 0;
     ProcessControlBlock *pcb;
-    while (dequeue(processInfoQueue, &pcb))
+    Node *ptr = processInfoQueue->front;
+    float TA = 0;
+    float RT = 0;
+    float sum = 0;
+    while (ptr)
     {
-
-        sum = sum + ((pcb->finishTime - pcb->arrivalTime) - pcb->executionTime);
+        pcb = ptr->dataPtr;
+        TA = (pcb->finishTime - pcb->arrivalTime);
+        RT = pcb->executionTime;
+        sum = sum + (TA / RT);
+        ptr = ptr->nextNode;
     }
     return sum / size;
 }
-/**
- * @brief
- *
- * @param processInfoArray
- */
-void generateSchedulerLog(ProcessControlBlock *processInfoArray[]);
 
-/**
- * @brief
- *
- * @param processInfoArray
- */
-void generateSchedulerPerf(Queue *processInfoArray[]);
+float calculateAverageWaitingTime(Queue *processInfoQueue, int size)
+{
+    float sum = 0;
+    ProcessControlBlock *pcb;
+    Node *ptr = processInfoQueue->front;
+    while (ptr)
+    {
+        pcb = ptr->dataPtr;
+        sum = sum + ((pcb->finishTime - pcb->arrivalTime) - pcb->executionTime);
+        ptr = ptr->nextNode;
+    }
+    return sum / size;
+}
+
+void generateSchedulerLog(Queue *lines);
+
+void generateSchedulerPerf(Queue *processInfoQueue);
 
 void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority, ProcessState state, int finishTime)
 {
@@ -74,10 +83,10 @@ void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority,
 
 void printProcessInfo(ProcessControlBlock *pcb)
 {
-    DEBUG_PRINTF("********\n");
+    DEBUG_PRINTF("===================\n");
     DEBUG_PRINTF("PID=%d\nArrival Time=%d\nExecution Time=%d\nPriority=%d\nMemsize=%d\n",
                  pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->priority, pcb->memSize);
-    DEBUG_PRINTF("********\n");
+    DEBUG_PRINTF("===================\n");
 }
 
 int receiveMessage(ProcessControlBlock **pcbToGet)
@@ -90,7 +99,6 @@ int receiveMessage(ProcessControlBlock **pcbToGet)
         // *mtype = newMsg.mtype;
         // memcpy(*pcbToGet, &newMsg.pcb, sizeof(ProcessControlBlock));
         (*pcbToGet)->arrivalTime = newMsg.pcb.arrivalTime;
-
         (*pcbToGet)->inputPID = newMsg.pcb.inputPID;
         (*pcbToGet)->executionTime = newMsg.pcb.executionTime;
         (*pcbToGet)->remainingTime = newMsg.pcb.remainingTime;
@@ -142,22 +150,46 @@ void output_processFinishedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF("%s", buffer);
 }
 
-void logScheduler()
+void generateSchedulerLog(Queue *lines)
 {
     FILE *logfile = fopen(SCHEDULER_LOG_FILENAME, "w");
     char *line = NULL;
-    while (dequeue(outputQueue, (void **)&line))
+    fputs("#At time x process y state arr w total z remain y wait k\n", logfile);
+    while (dequeue(lines, (void **)&line))
     {
         fputs(line, logfile);
     }
     fclose(logfile);
-    exit(0);
 }
 
-void logPerfScheduler()
+void generateSchedulerPerf(Queue *processInfoQueue)
 {
+    /* Calculate */
     float utilizationPercent = ((float)idle_cycles / total_cycles) * 100;
-    float WTA = 0;
+    float WTA = calculateAverageWeightedTATime(processInfoQueue, processInfoQueue->capacity);
+    float avgWaiting = calculateAverageWaitingTime(processInfoQueue, processInfoQueue->capacity);
+
+    printf("\nCPU utilization = %.2f%%\nAvg WTA = %.2f\nAvg Waiting = %.1f",
+           utilizationPercent,
+           WTA,
+           avgWaiting);
+
+    /* Round */
+
+    utilizationPercent = roundf(((float)utilizationPercent) * 100);
+    WTA = roundf(((float)WTA) * 100);
+    avgWaiting = roundf(((float)avgWaiting) * 100) / 100.0;
+
+    /* Write to file */
+
+    FILE *perfFile = fopen(SCHEDULER_PERF_FILENAME, "w");
+
+    fprintf(perfFile, "CPU utilization = %.2f%%\nAvg WTA = %.2f\nAvg Waiting = %.1f",
+            utilizationPercent,
+            WTA,
+            avgWaiting);
+
+    fclose(perfFile);
 }
 
 void scheduler_HPF()
@@ -171,6 +203,103 @@ void scheduler_HPF()
     // current exec pid = first element from queue
     // signal old process to stop
     // signal new process to start
+    ProcessControlBlock *currentPCB = (NULL);
+    ProcessControlBlock *newPCB = (ProcessControlBlock *)malloc(sizeof(ProcessControlBlock));
+    int currClk = -1;
+
+    for (;;)
+    {
+
+        currClk = getClk();
+        DEBUG_PRINTF("[SCHED] Current Time is %d\n", currClk);
+
+        /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
+        while (receiveMessage(&newPCB) != -1)
+        {
+
+            /* Enqueue new process, priority = execution time*/
+            enqueuePriority(HPF_Queue, newPCB, (newPCB->priority));
+            newPCB->state = ProcessState_Ready;
+            /* Queue was empty, */
+            if (currentPCB == NULL)
+            {
+                currentPCB = newPCB;
+                currentPCB->startTime = currClk;
+                saveProcessState(currentPCB,
+                                 currentPCB->remainingTime,
+                                 currentPCB->priority,
+                                 ProcessState_Running, 0);
+                output_processStartedStr(currClk, currentPCB);
+            }
+            else
+            {
+                // if I was less priority than the running process then save the status of the current and replace it
+                if (newPCB->priority < currentPCB->priority)
+                {
+                    saveProcessState(currentPCB,
+                                     currentPCB->remainingTime,
+                                     currentPCB->priority,
+                                     ProcessState_Blocked, 0);
+                    output_processStoppedStr(currClk, currentPCB);
+                    currentPCB = newPCB;
+                    currentPCB->startTime = currClk;
+                    saveProcessState(currentPCB,
+                                     currentPCB->remainingTime,
+                                     currentPCB->priority,
+                                     ProcessState_Running, 0);
+                    output_processStartedStr(currClk, currentPCB);
+                }
+            }
+        }
+
+        if (currentPCB == NULL)
+            idle_cycles++;
+        else
+        {
+
+            if (currentPCB->remainingTime == 0)
+            {
+                /* Save process state and dequeue it*/
+                saveProcessState(currentPCB,
+                                 0,
+                                 currentPCB->priority,
+                                 ProcessState_Finished, currClk);
+                output_processFinishedStr(currClk, currentPCB);
+                removeNodePriority(HPF_Queue, (void **)&currentPCB);
+
+                currentPCB = NULL;
+
+                /* Get new process(if exists) from queue as the current is finished*/
+                if (peekPriority(HPF_Queue, (void **)&currentPCB))
+                {
+                    if (currentPCB->state == ProcessState_Blocked)
+                    {
+                        currentPCB->startTime = currClk;
+                        saveProcessState(currentPCB,
+                                         currentPCB->remainingTime,
+                                         currentPCB->priority,
+                                         ProcessState_Running, 0);
+                        output_processResumedStr(currClk, currentPCB);
+                    }
+                    else
+                    {
+                        currentPCB->startTime = currClk;
+                        saveProcessState(currentPCB,
+                                         currentPCB->remainingTime,
+                                         currentPCB->priority,
+                                         ProcessState_Running, 0);
+                        output_processStartedStr(currClk, currentPCB);
+                    }
+                }
+            }
+            /* Decrement current process time */
+            if (currentPCB)
+                currentPCB->remainingTime--;
+        }
+        total_cycles++;
+        while (currClk == getClk())
+            ;
+    }
 }
 
 void scheduler_SJF()
@@ -199,7 +328,7 @@ void scheduler_SJF()
         {
 
             /* Enqueue new process, priority = execution time*/
-            enqueuePriority(SJF_Queue, newPCB, (newPCB->executionTime) * (-1));
+            enqueuePriority(SJF_Queue, newPCB, (newPCB->executionTime));
             newPCB->state = ProcessState_Ready;
             /* Queue was empty, */
             if (currentPCB == NULL)
@@ -212,7 +341,6 @@ void scheduler_SJF()
                                  ProcessState_Running, 0);
                 output_processStartedStr(currClk, currentPCB);
             }
-
         }
 
         if (currentPCB == NULL)
@@ -252,7 +380,7 @@ void scheduler_SJF()
     }
 }
 
-void scheduler_RR(unsigned int quantum)
+void scheduler_RR(int quantum)
 {
     // current executing pid
     // for each clk cycle
@@ -262,27 +390,27 @@ void scheduler_RR(unsigned int quantum)
     // if next quantum
     // signal old process to stop
     // signal new process to start
-    RR_Queue = createCircularQueue();
+    RR_Queue = createQueue();
     finishedProcesses = createQueue();
 
     ProcessControlBlock *currentPCB = NULL;
     ProcessControlBlock *newPCB = NULL;
 
     int prevClk = -1;
-    unsigned int quantum_passed = 0;
+    int quantum_passed = 0;
     // int mtype = -1;
-    while (1)
+
+    for (;;)
     {
-        while (getClk() == prevClk)
-            ;
 
         prevClk = getClk();
+        DEBUG_PRINTF("[SCHED] Current Time is %d\n", prevClk);
 
         /* New process has just arrived, put it at the back of queue*/
         while (receiveMessage(&newPCB) != -1)
         {
-
-            enqueueCircular(RR_Queue, newPCB);
+            printProcessInfo(newPCB);
+            enqueue(RR_Queue, newPCB);
             newPCB->state = ProcessState_Ready;
             /* Queue was empty, */
             if (currentPCB == NULL)
@@ -294,40 +422,40 @@ void scheduler_RR(unsigned int quantum)
             }
         }
 
-        if (!circularIsEmpty(RR_Queue))
-            quantum_passed++;
-
-        if (circularIsEmpty(RR_Queue))
+        if (!currentPCB)
+        {
             idle_cycles++;
+        }
         else
         {
-            /* There is currently a process in execution, decrement its remaining time*/
-            currentPCB->remainingTime--;
+            // Interrupt process when:
+            // Case 1: Finish on quantum
+            // Case 2: Finished before quantum
+            // Case 3: Didn't finish before quantum
+            // Post quantum: schedule new process
 
-            // If process has just finished
-            if (currentPCB->remainingTime = 0)
+            if (currentPCB->remainingTime == 0)
             {
                 /* Reset quantum passed as we will start a new process */
                 quantum_passed = 0;
 
-                saveProcessState(currentPCB, 0, currentPCB->priority, ProcessState_Finished, prevClk);
+                saveProcessState(currentPCB, 0,
+                                 currentPCB->priority, ProcessState_Finished, prevClk);
 
                 output_processFinishedStr(prevClk, currentPCB);
 
                 /* Remove the process from the queue */
-                dequeueCircularFront(RR_Queue, &currentPCB);
+                dequeue(RR_Queue, (void **)&currentPCB);
 
-                enqueue(finishedProcesses, currentPCB);
+                enqueue(finishedProcesses, &currentPCB);
 
-                if (!peekFront(RR_Queue, &currentPCB))
+                if (!peek(RR_Queue, (void **)&currentPCB))
                 {
                     /* No more processes for now*/
                     currentPCB = NULL;
                 }
                 else
                 {
-                    if (currentPCB && currentPCB->inputPID == 3)
-                        ;
                     /* Get next process and run it */
                     // Process is starting for the first time
                     if (currentPCB->state == ProcessState_Ready)
@@ -346,8 +474,9 @@ void scheduler_RR(unsigned int quantum)
         /* 1 quantum has just passed, schedule next process */
         if (quantum_passed == quantum)
         {
-            if (!circularIsEmpty(RR_Queue))
+            if (!isEmpty(RR_Queue) && RR_Queue->front->nextNode != NULL)
             {
+
                 ProcessControlBlock *oldProc = NULL;
 
                 /* Remove from queue then enqueue so it's at the back */
@@ -355,25 +484,40 @@ void scheduler_RR(unsigned int quantum)
                 output_processStoppedStr(prevClk, currentPCB);
 
                 /* Remove the process from the queue */
-                dequeueCircularFront(RR_Queue, &oldProc);
+                dequeue(RR_Queue, (void **)&oldProc);
 
-                enqueueCircular(RR_Queue, oldProc);
+                /* Check if process finished exactly on quantum */
+                enqueue(RR_Queue, oldProc);
 
                 /* Get new process */
-                dequeueCircularFront(RR_Queue, &currentPCB);
-                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                peek(RR_Queue, (void **)&currentPCB);
 
                 // Process is starting for the first time
-                if (currentPCB->startTime == ProcessState_Ready)
+                if (currentPCB->state == ProcessState_Ready)
                 {
                     currentPCB->startTime = prevClk;
                     output_processStartedStr(prevClk, currentPCB);
                 }
                 else
                     output_processResumedStr(prevClk, currentPCB);
+
+                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
             }
             /* Reset quantum passed as we will start a new process */
             quantum_passed = 0;
+        }
+        /* There is currently a process in execution, decrement its remaining time*/
+        if (currentPCB)
+        {
+            currentPCB->remainingTime--;
+            quantum_passed++;
+        }
+        total_cycles++;
+        while (prevClk == getClk())
+            ;
+        if (prevClk == 15)
+        {
+            printf("AAAAAA");
         }
     }
     DEBUG_PRINTF("FINISHED\n");
@@ -390,7 +534,8 @@ void processFinished_Handler(int signum) {}
 void SIGINT_Handler(int signum)
 {
     // TODO free all resources
-    logScheduler();
+    generateSchedulerLog(outputQueue);
+    generateSchedulerPerf(finishedProcesses);
     destroyClk(true);
     exit(0);
 }
@@ -409,13 +554,6 @@ void getProcessMessageQueue()
     }
 }
 
-/**
- * @brief The scheduler which schedules which process needs to run and which to suspend.
- *
- * @param argc Argument count
- * @param argv Argument vector: Contains the scheduler algorithm type and optional params.
- * @return int
- */
 int main(int argc, char *argv[])
 {
     DEBUG_PRINTF("[SCHEDULER] Scheduler started...\n");

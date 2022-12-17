@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 /************************************************* Queue *************************************************/
+
 Queue *createQueue()
 {
     Queue *queue = (Queue *)malloc(sizeof(Queue));
@@ -15,14 +16,11 @@ Queue *createQueue()
     return queue;
 }
 
-// Queue is empty when size is 0
 bool isEmpty(Queue *queue)
 {
-    return (queue->capacity == 0);
+    return (queue->front == NULL);
 }
 
-// Function to add an item to the queue.
-// It changes rear and size
 void enqueue(Queue *q, void *dataPtr)
 {
     Node *link = (Node *)malloc(sizeof(Node));
@@ -45,8 +43,6 @@ void enqueue(Queue *q, void *dataPtr)
     q->rear = link;
 }
 
-// Function to remove an item from queue.
-// It changes front and size
 bool dequeue(Queue *queue, void **out_data)
 {
     if (queue->front == NULL)
@@ -83,6 +79,7 @@ void destroyQueue(Queue *q)
 }
 
 /************************************************* Priority Queue *************************************************/
+
 PriorityQueue *createPriorityQueue()
 {
     PriorityQueue *pqueue = (PriorityQueue *)malloc(sizeof(PriorityQueue));
@@ -116,7 +113,7 @@ void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority)
     // lesser priority than new node. So
     // insert newnode before head node
     // and change head node.
-    if (q->front->priority < priority)
+    if (q->front->priority > priority)
     {
 
         // Insert New Node before head
@@ -128,7 +125,7 @@ void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority)
         // Traverse the list and find a
         // position to insert new node
         while (start->nextNode != NULL &&
-               start->nextNode->priority > priority)
+               start->nextNode->priority < priority)
         {
             start = start->nextNode;
         }
@@ -212,6 +209,7 @@ void destroyPriorityQueue(PriorityQueue *q)
 }
 
 /************************************************* Circular Queue *************************************************/
+
 CircularQueue *createCircularQueue()
 {
 

@@ -41,7 +41,7 @@ typedef struct
 typedef struct
 {
     int levels;
-    Queue queues[10];
+    Queue queues[11];
 } MultiLevelQueue;
 
 /* Queue */
@@ -79,7 +79,7 @@ MultiLevelQueue *createMultiLevelQueue(int levels);
 
 bool multiLevelisEmpty(MultiLevelQueue *q);
 void enqueueMultiLevel(MultiLevelQueue *q, void **dataPtr);
-bool peekMultiLevel(MultiLevelQueue *q, int level, void **out_data);
+bool peekMultiLevel(MultiLevelQueue *q, void **out_data);
 bool dequeueMultiLevel(MultiLevelQueue *q, int level, void **out_data);
 void destroyMultiLevelQueue(MultiLevelQueue *q);
 

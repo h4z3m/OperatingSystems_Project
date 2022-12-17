@@ -3,17 +3,17 @@
 /* Modify this file as needed*/
 int remainingtime;
 
-void SIGUSR1_Handler()
+void SIGUSR1_Handler(int signum)
 {
     // TODO Log when process halted
-    //log(halt)
-    //down - sem = 0
-    //down - sem = -1 ->blocked
-    //log(cont)
+    // log(halt)
+    // down - sem = 0
+    // down - sem = -1 ->blocked
+    // log(cont)
     // TODO Log when process continued
 }
 
-void SIGUSR2_Handler() {}
+void SIGUSR2_Handler(int signum) {}
 
 /**
  * @brief This file simulates the process which needs to be CPU bound.
@@ -35,6 +35,8 @@ int main(int agrc, char *argv[])
     while (remainingtime > 0)
     {
         // remainingtime = ??;
+        //down();
+        remainingtime--;
     }
 
     destroyClk(false);
