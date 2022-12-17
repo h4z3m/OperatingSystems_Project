@@ -15,6 +15,9 @@
 /* Represents the idle cycles, must be updated somewhere */
 static int idle_cycles = 0;
 
+/* Represents the idle cycles, must be updated somewhere */
+static int total_cycles = 0;
+
 /* Message queue ID between scheduler and process generator*/
 static int proc_msgq = 0;
 
@@ -22,6 +25,7 @@ static int proc_msgq = 0;
 static Queue *outputQueue = NULL;
 
 static Queue *finishedProcesses = NULL;
+
 /* Represents the scheduler type which is to run */
 static SchedulingAlgorithm_t schedAlgorithm = SchedulingAlgorithm_RR;
 
@@ -30,21 +34,22 @@ static PriorityQueue *SJF_Queue = NULL;
 static MultiLevelQueue *MLVL_Queue = NULL;
 static CircularQueue *RR_Queue = NULL;
 
-/**
- * @brief
- *
- * @param pcb
- * @return int
- */
-int calculateAverageWeightedTATime(ProcessControlBlock *pcb);
-/**
- * @brief
- *
- * @param processInfoArray
- * @return int
- */
-int calculateAverageWaitingTime(ProcessControlBlock *processInfoArray[]);
+int calculateAverageWeightedTATime(ProcessControlBlock *pcb)
+{
+    return ((pcb->finishTime - pcb->arrivalTime) / pcb->executionTime);
+}
 
+int calculateAverageWaitingTime(Queue *processInfoQueue, int size)
+{
+    int sum = 0;
+    ProcessControlBlock *pcb;
+    while (dequeue(processInfoQueue, &pcb))
+    {
+
+        sum = sum + ((pcb->finishTime - pcb->arrivalTime) - pcb->executionTime);
+    }
+    return sum / size;
+}
 /**
  * @brief
  *
@@ -57,7 +62,7 @@ void generateSchedulerLog(ProcessControlBlock *processInfoArray[]);
  *
  * @param processInfoArray
  */
-void generateSchedulerPerf(ProcessControlBlock *processInfoArray[]);
+void generateSchedulerPerf(Queue *processInfoArray[]);
 
 void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority, ProcessState state, int finishTime)
 {
@@ -96,7 +101,7 @@ int receiveMessage(ProcessControlBlock **pcbToGet)
     return ret;
 }
 
-void enq_processStartedStr(int currTime, ProcessControlBlock *pcb)
+void output_processStartedStr(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
     int waitingTime = (pcb->startTime - pcb->arrivalTime);
@@ -106,7 +111,7 @@ void enq_processStartedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF("%s", buffer);
 }
 
-void enq_processStoppedStr(int currTime, ProcessControlBlock *pcb)
+void output_processStoppedStr(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
     snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tstopped arr\t%d\ttotal\t%d\tremain\t%d\twait\t0\n",
@@ -115,7 +120,7 @@ void enq_processStoppedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF("%s", buffer);
 }
 
-void enq_processResumedStr(int currTime, ProcessControlBlock *pcb)
+void output_processResumedStr(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
     int waitingTime = currTime - pcb->arrivalTime - pcb->remainingTime;
@@ -125,7 +130,7 @@ void enq_processResumedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF("%s", buffer);
 }
 
-void enq_processFinishedStr(int currTime, ProcessControlBlock *pcb)
+void output_processFinishedStr(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
     int waitingTime = (pcb->finishTime - pcb->arrivalTime) - pcb->executionTime;
@@ -147,6 +152,12 @@ void logScheduler()
     }
     fclose(logfile);
     exit(0);
+}
+
+void logPerfScheduler()
+{
+    float utilizationPercent = ((float)idle_cycles / total_cycles) * 100;
+    float WTA = 0;
 }
 
 void scheduler_HPF()
@@ -174,7 +185,7 @@ void scheduler_SJF()
     SJF_Queue = createPriorityQueue();
     ProcessControlBlock *currentPCB = (NULL);
     ProcessControlBlock *newPCB = (ProcessControlBlock *)malloc(sizeof(ProcessControlBlock));
-
+    ProcessControlBlock *frontPCB = NULL;
     int currClk = -1;
 
     for (;;)
@@ -186,65 +197,59 @@ void scheduler_SJF()
         /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
         while (receiveMessage(&newPCB) != -1)
         {
+
             /* Enqueue new process, priority = execution time*/
-            enqueuePriority(SJF_Queue, newPCB, -newPCB->executionTime);
+            enqueuePriority(SJF_Queue, newPCB, (newPCB->executionTime) * (-1));
+            printProcessInfo(newPCB);
             newPCB->state = ProcessState_Ready;
             /* Queue was empty, */
             if (currentPCB == NULL)
             {
                 currentPCB = newPCB;
                 currentPCB->startTime = currClk;
-                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
-                enq_processStartedStr(currClk, currentPCB);
+                saveProcessState(currentPCB,
+                                 currentPCB->remainingTime,
+                                 currentPCB->priority,
+                                 ProcessState_Running, 0);
+                output_processStartedStr(currClk, currentPCB);
             }
-            else if (currentPCB->remainingTime > newPCB->remainingTime)
-            {
-                /* Save process state */
-                ProcessControlBlock *oldProc = currentPCB;
-                saveProcessState(oldProc,
-                                 oldProc->remainingTime,
-                                 oldProc->priority,
-                                 ProcessState_Blocked, 0);
-                enq_processStoppedStr(currClk, oldProc);
 
-                /* Run next process for the first time*/
-                currentPCB = newPCB;
-                currentPCB->startTime = currClk;
-                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
-                enq_processStartedStr(currClk, currentPCB);
-            }
         }
 
         if (priorityIsEmpty(SJF_Queue))
             idle_cycles++;
         else
         {
-            /* Decrement current process time */
-            currentPCB->remainingTime--;
+
             if (currentPCB->remainingTime == 0)
             {
                 /* Save process state and dequeue it*/
-                ProcessControlBlock *oldProc;
-                dequeuePriority(SJF_Queue, (void **)&oldProc);
                 saveProcessState(currentPCB,
                                  0,
                                  currentPCB->priority,
                                  ProcessState_Finished, currClk);
-                enq_processFinishedStr(currClk, oldProc);
+                output_processFinishedStr(currClk, currentPCB);
+                DEBUG_PRINTF("[SCHED] removing node\n");
+                removeNodePriority(SJF_Queue, (void **)&currentPCB);
+                DEBUG_PRINTF("[SCHED] removednode\n");
+
                 currentPCB = NULL;
 
                 /* Get new process(if exists) from queue as the current is finished*/
-                if (peekPriority(SJF_Queue, (void **)&currentPCB))
+                if (dequeuePriority(SJF_Queue, (void **)&currentPCB))
                 {
                     currentPCB->startTime = currClk;
                     saveProcessState(currentPCB,
                                      currentPCB->remainingTime,
                                      currentPCB->priority,
                                      ProcessState_Running, 0);
-                    enq_processStartedStr(currClk, currentPCB);
+                    output_processStartedStr(currClk, currentPCB);
                 }
             }
+            /* Decrement current process time */
+            currentPCB->remainingTime--;
         }
+        total_cycles++;
         while (currClk == getClk())
             ;
     }
@@ -288,7 +293,7 @@ void scheduler_RR(unsigned int quantum)
                 currentPCB = newPCB;
                 currentPCB->startTime = prevClk;
                 saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
-                enq_processStartedStr(prevClk, currentPCB);
+                output_processStartedStr(prevClk, currentPCB);
             }
         }
 
@@ -310,7 +315,7 @@ void scheduler_RR(unsigned int quantum)
 
                 saveProcessState(currentPCB, 0, currentPCB->priority, ProcessState_Finished, prevClk);
 
-                enq_processFinishedStr(prevClk, currentPCB);
+                output_processFinishedStr(prevClk, currentPCB);
 
                 /* Remove the process from the queue */
                 dequeueCircularFront(RR_Queue, &currentPCB);
@@ -331,10 +336,10 @@ void scheduler_RR(unsigned int quantum)
                     if (currentPCB->state == ProcessState_Ready)
                     {
                         currentPCB->startTime = prevClk;
-                        enq_processStartedStr(prevClk, currentPCB);
+                        output_processStartedStr(prevClk, currentPCB);
                     }
                     else
-                        enq_processResumedStr(prevClk, currentPCB);
+                        output_processResumedStr(prevClk, currentPCB);
 
                     currentPCB->state = ProcessState_Running;
                 }
@@ -350,7 +355,7 @@ void scheduler_RR(unsigned int quantum)
 
                 /* Remove from queue then enqueue so it's at the back */
                 saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Blocked, 0);
-                enq_processStoppedStr(prevClk, currentPCB);
+                output_processStoppedStr(prevClk, currentPCB);
 
                 /* Remove the process from the queue */
                 dequeueCircularFront(RR_Queue, &oldProc);
@@ -365,10 +370,10 @@ void scheduler_RR(unsigned int quantum)
                 if (currentPCB->startTime == ProcessState_Ready)
                 {
                     currentPCB->startTime = prevClk;
-                    enq_processStartedStr(prevClk, currentPCB);
+                    output_processStartedStr(prevClk, currentPCB);
                 }
                 else
-                    enq_processResumedStr(prevClk, currentPCB);
+                    output_processResumedStr(prevClk, currentPCB);
             }
             /* Reset quantum passed as we will start a new process */
             quantum_passed = 0;

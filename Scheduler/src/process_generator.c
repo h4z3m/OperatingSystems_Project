@@ -149,22 +149,6 @@ SchedulingAlgorithm_t getSchedulerAlgorithm(char algorithmNum)
     return SchedulingAlgorithm_HPF;
 }
 
-int calculateAverageWeightedTATime(ProcessControlBlock *pcb)
-{
-    return ((pcb->finishTime - pcb->arrivalTime) / pcb->executionTime);
-}
-
-int calculateAverageWaitingTime(ProcessControlBlock *processInfoArray[])
-{
-    // how to get size
-    int size = 100;
-    int sum = 0;
-    for (int i = 0; i < size; i++)
-    {
-        sum = sum + ((processInfoArray[i]->finishTime - processInfoArray[i]->arrivalTime) - processInfoArray[i]->executionTime);
-    }
-    return sum / size;
-}
 
 int sendMessage(ProcessControlBlock *pcbToSend)
 {
@@ -189,6 +173,7 @@ int sendMessage(ProcessControlBlock *pcbToSend)
 }
 
 int main(int argc, char *argv[])
+
 
 {
 
@@ -267,7 +252,7 @@ int main(int argc, char *argv[])
                 {
                     // send to sched
                     DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, prevClk);
-
+                    
                     sendMessage(process_array[i]);
                     // DEBUG_PRINTF("[PROCGEN] after sending %d\n", getClk());
                     processes_sent++;

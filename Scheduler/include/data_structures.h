@@ -60,6 +60,7 @@ bool priorityIsEmpty(PriorityQueue *q);
 void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority);
 bool peekPriority(PriorityQueue *q, void **out_data);
 bool dequeuePriority(PriorityQueue *q, void **out_data);
+void removeNodePriority(PriorityQueue *q, void **dataToDelete);
 void destroyPriorityQueue(PriorityQueue *q);
 
 /* Circular Queue*/

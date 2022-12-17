@@ -1,4 +1,5 @@
 #include "../include/data_structures.h"
+#include "../include/types.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -93,7 +94,7 @@ PriorityQueue *createPriorityQueue()
 
 bool priorityIsEmpty(PriorityQueue *q)
 {
-    return (q->capacity == 0);
+    return (q->front == NULL);
 }
 
 void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority)
@@ -102,6 +103,7 @@ void enqueuePriority(PriorityQueue *q, void *dataPtr, int priority)
 
     // Create new Node
     PrioNode *temp = (PrioNode *)malloc(sizeof(PrioNode));
+    temp->priority = priority;
     temp->dataPtr = dataPtr;
     q->capacity++;
     if (!q->front)
@@ -163,6 +165,40 @@ bool dequeuePriority(PriorityQueue *q, void **out_data)
     free(nodeToDeletePtr);
     q->capacity--;
     return 1;
+}
+
+void removeNodePriority(PriorityQueue *q, void **dataToDelete)
+{
+    PrioNode *deletedNode = q->front;
+    if (q->front == NULL)
+    {
+        return;
+    }
+
+    // Check if the first node is the one to be deleted
+    if (q->front->dataPtr == *dataToDelete)
+    {
+        deletedNode = q->front;
+        q->front = q->front->nextNode;
+        printf("=======deleted data = %d", ((ProcessControlBlock *)*dataToDelete)->inputPID);
+        free(deletedNode);
+        return;
+    }
+    PrioNode *previous = q->front;
+    deletedNode = q->front->nextNode;
+    while (deletedNode != NULL)
+    {
+        if (*dataToDelete == deletedNode->dataPtr)
+        {
+
+            previous->nextNode = deletedNode->nextNode;
+            printf("=======deleted data = %d", ((ProcessControlBlock *)*dataToDelete)->inputPID);
+            free(deletedNode);
+            return;
+        }
+        previous = deletedNode;
+        deletedNode = deletedNode->nextNode;
+    }
 }
 
 void destroyPriorityQueue(PriorityQueue *q)
