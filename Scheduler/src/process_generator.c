@@ -150,8 +150,20 @@ int sendMessage(ProcessControlBlock *pcbToSend, long mtype)
     return ret;
 }
 
-int main(int argc, char *argv[])
 
+
+void initMessageQueue()
+{
+    if (-1 == (proc_msgq = msgget(MSGQKEY, IPC_CREAT | 0666)))
+    {
+        perror("[PROCGEN] Could not get message queue...\n");
+        exit(-1);
+    }
+
+    DEBUG_PRINTF("[PROCGEN] Message queue ID = %d\n", proc_msgq);
+}
+
+int main(int argc, char *argv[])
 {
 
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -163,41 +175,38 @@ int main(int argc, char *argv[])
     if (argc == 6)
         RR_quantum = atoi(argv[5]);
 
-    if (-1 == (proc_msgq = msgget(MSGQKEY, IPC_CREAT | 0666)))
-    {
-        perror("[PROCGEN] Could not get message queue...\n");
-        exit(-1);
-    }
-
-    DEBUG_PRINTF("[PROCGEN] Message queue ID = %d\n", proc_msgq);
-
     // 1. Read the input files.
+
     ProcessControlBlock **process_array = (ProcessControlBlock **)malloc(sizeof(ProcessControlBlock *) * 100);
+
     int process_count = readInputFile(process_filename, process_array);
+    DEBUG_PRINTF("[PROCGEN] Processes = %d\n", process_count);
+    initMessageQueue();
 
     // 2. Read the chosen scheduling algorithm and its parameters, if there are any from the argument list.
+
     SchedulingAlgorithm_t sched = getSchedulerAlgorithm(*argv[3]);
 
     // 3. Initiate and create the scheduler and clock processes.
-    // Create clk process
 
-    // Create scheduler process
     char schede[5] = {0};
     char quantum[5] = {0};
+    char proc_count[5] = {0};
     char *schedexec = "./scheduler.out";
     // sprintf(schede, "%d", sched);
     // sprintf(quantum, "%d", RR_quantum);
-
-    sprintf(schede, "3");
+    sprintf(schede, "2");
     sprintf(quantum, "%d", 4);
+    sprintf(proc_count, "%d", process_count);
+    char *args[] = {schedexec, schede, quantum, proc_count, NULL};
 
-    char *args[] = {schedexec, schede, quantum, NULL};
-
-    int clk_pid = fork();
+    // Create clk process
+    pid_t clk_pid = fork();
     if (clk_pid == 0)
         execv("./clk.out", NULL);
 
-    int scheduler_pid = fork();
+    // Create scheduler process
+    pid_t scheduler_pid = fork();
     if (scheduler_pid == 0)
         execv(args[0], args);
 
@@ -207,12 +216,14 @@ int main(int argc, char *argv[])
 
     // To get time use this function.
     int prevClk = getClk();
+
     printf("Current Time is %d\n", prevClk);
 
     // 5. Create a data structure for processes and provide it with its parameters.
 
     // 6. Send the information to the scheduler at the appropriate time.
     int processes_sent = 0;
+
     for (;;)
     {
         int currClk = getClk();
@@ -223,6 +234,7 @@ int main(int argc, char *argv[])
 
             for (int i = 0; i < process_count; i++)
             {
+                /* Send a process at its arrival time */
                 if (process_array[i]->arrivalTime == prevClk + 1)
                 {
                     /* Send to sched */
@@ -230,18 +242,33 @@ int main(int argc, char *argv[])
                     sendMessage(process_array[i], 1);
                     processes_sent++;
                 }
+                /* Generator has sent all processes */
+                if (processes_sent == process_count)
+                {
+                    pid_t pid;
+                    /* Wait for scheduler */
+                    do
+                    {
+                        int ret = 0;
+                        pid = wait(&ret);
+
+                    } while (pid != scheduler_pid);
+                    // raise(SIGINT);
+                    goto CLEAR_RESOURCES;
+                }
+                currClk = getClk();
             }
-            currClk = getClk();
         }
-        }
-
+    }
+CLEAR_RESOURCES:
     // 7. Clear clock resources
-    destroyClk(true);
+    clearResources(0);
 }
-
 void clearResources(int signum)
 {
     // TODO Clears all resources in case of interruption
+    DEBUG_PRINTF("[PROCGEN] Terminating...\n");
+
     destroyClk(true);
     msgctl(proc_msgq, IPC_RMID, (struct msqid_ds *)0);
     exit(0);

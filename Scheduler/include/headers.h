@@ -25,6 +25,15 @@ typedef short bool;
 #define MSGQKEY 400
 #define SEM_PROC_SCHED_KEY 500
 
+#define RED "\x1B[31m"
+#define GRN "\x1B[32m"
+#define YEL "\x1B[33m"
+#define BLU "\x1B[34m"
+#define MAG "\x1B[35m"
+#define CYN "\x1B[36m"
+#define WHT "\x1B[37m"
+#define RESET "\x1B[0m"
+
 #define SCHEDULER_LOG_FILENAME ((const char *)"scheduler.log")
 #define SCHEDULER_PERF_FILENAME ((const char *)"scheduler.perf")
 
@@ -60,12 +69,13 @@ void down(int sem)
     }
 }
 
-void up(int sem)
+
+void up(int sem, int up_val)
 {
     struct sembuf v_op;
 
     v_op.sem_num = 0;
-    v_op.sem_op = 1;
+    v_op.sem_op = up_val;
     v_op.sem_flg = !IPC_NOWAIT;
 
     if (semop(sem, &v_op, 1) == -1)

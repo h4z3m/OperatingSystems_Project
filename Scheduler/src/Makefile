@@ -21,6 +21,7 @@ OBJ_TEST=$(OBJDIR)/data_structures.o $(OBJDIR)/test.o
 
 all: $(OBJDIR) $(BINDIR) process_generator test_generator scheduler clk process
 	chmod 0777 $(BINDIR)/*
+	ipcrm -a
 
 $(OBJDIR):
 	mkdir $(OBJDIR)

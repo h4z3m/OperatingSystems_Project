@@ -1,19 +1,26 @@
 #include "../include/headers.h"
+#include "../include/types.h"
 
 /* Modify this file as needed*/
 int remainingtime;
 
-void SIGUSR1_Handler(int signum)
-{
-    // TODO Log when process halted
-    // log(halt)
-    // down - sem = 0
-    // down - sem = -1 ->blocked
-    // log(cont)
-    // TODO Log when process continued
-}
+int sem_id;
 
-void SIGUSR2_Handler(int signum) {}
+void getSem(int *semid)
+{
+    int key_id = ftok("./", getpid());
+
+    if (key_id == -1)
+        perror("[PROCESS] Error in ftok\n");
+
+    *semid = semget(key_id, 1, 0666 | IPC_CREAT);
+
+    if (*semid == -1)
+    {
+        perror("[PROCESS] Error in create sem\n");
+        exit(-1);
+    }
+}
 
 /**
  * @brief This file simulates the process which needs to be CPU bound.
@@ -26,20 +33,38 @@ void SIGUSR2_Handler(int signum) {}
  */
 int main(int agrc, char *argv[])
 {
-    // TODO Log when process started for the first time
-    signal(SIGUSR1, SIGUSR1_Handler);
-    signal(SIGUSR2, SIGUSR2_Handler);
+    int pid = atoi(argv[1]);
+    remainingtime = atoi(argv[2]);
+    DEBUG_PRINTF(RED "[PROCESS %d] Created, remaining time =%d\n" RESET, pid, remainingtime);
     initClk();
-    // TODO The process needs to get the remaining time from somewhere
+    getSem(&sem_id);
+
     // remainingtime = ??;
+    int currClk = -1;
+    /* Initially set the semaphore to zero to simulate blocked process*/
+    union Semun semun = {0};
+    semun.val = 0;
+    if (semctl(sem_id, 0, SETVAL, semun) == -1)
+    {
+        perror("[SCHEDULER] Error in semctl\n");
+        exit(-1);
+    }
+    /* Up semaphore to synchronize with scheduler */
+    up(sem_id, 1);
+
     while (remainingtime > 0)
     {
-        // remainingtime = ??;
-        //down();
+        /* Process tries to decrement semaphore, blocks until becomes non zero with allowed run time*/
+        down(sem_id);
+        DEBUG_PRINTF(RED "[PROCESS %d] Downed, remaining time =%d\n" RESET, pid, remainingtime);
         remainingtime--;
+        currClk = getClk();
+        while (currClk == getClk())
+            ;
     }
 
     destroyClk(false);
+    DEBUG_PRINTF(RED "[PROCESS %d] Terminating...\n" RESET, pid);
 
     return 0;
 }

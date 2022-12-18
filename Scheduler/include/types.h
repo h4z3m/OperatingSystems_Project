@@ -21,7 +21,7 @@ typedef struct
 
     /*** Changed only when the process starts for the first time ***/
     int startTime; /* Time at which the process STARTS execution*/
-
+    int sem_id;
     /*** Changes during the process life-time***/
     int remainingTime;  /* Remaining time for the process to finish*/
     int priority;       /* 0 : Highest, 10: Lowest*/
@@ -43,5 +43,15 @@ typedef enum
     SchedulingAlgorithm_MLFL     /* Multi-Level Feedback Loop*/
 
 } SchedulingAlgorithm_t;
+
+/* arg for semctl system calls. */
+union Semun
+{
+    int val;               /* value for SETVAL */
+    struct semid_ds *buf;  /* buffer for IPC_STAT & IPC_SET */
+    unsigned short *array; /* array for GETALL & SETALL */
+    struct seminfo *__buf; /* buffer for IPC_INFO */
+    void *__pad;
+};
 
 #endif

@@ -27,15 +27,14 @@ void enqueue(Queue *q, void *dataPtr)
     link->dataPtr = dataPtr;
     link->nextNode = NULL;
     // Empty queue,
+    q->capacity++;
     if (q->front == NULL)
     {
         q->front = link;
         q->rear = link;
-        printf("Queue is empty, queueing first element...\n");
         return;
     }
     // Filled queue
-    q->capacity++;
 
     // Make the previous rear point to the newly created node
     q->rear->nextNode = link;
@@ -47,7 +46,6 @@ bool dequeue(Queue *queue, void **out_data)
 {
     if (queue->front == NULL)
     {
-        printf("Queue is empty.");
         return 0;
     }
     Node *deqNode = queue->front;
@@ -71,10 +69,12 @@ bool peek(Queue *q, void **dataPtr)
 
 void destroyQueue(Queue *q)
 {
-    void *temp;
+    void *temp = NULL;
     while (q->front != NULL)
     {
         dequeue(q, &temp);
+        if (temp)
+            free(temp);
     }
 }
 
@@ -257,19 +257,10 @@ bool peekRear(CircularQueue *q, void **out_data)
     return 1;
 }
 
-bool peekCircular(CircularQueue *q, void *out_data, unsigned int offset)
-{
-    if (offset == 0)
-        return 0;
-
-    static Node *start = NULL;
-}
-
 bool dequeueCircularFront(CircularQueue *q, void **out_data)
 {
     if (q->front == NULL)
     {
-        printf("Queue is empty");
         return 0;
     }
 
@@ -298,7 +289,6 @@ bool dequeueCircular(CircularQueue *q, void *deleted_data)
 {
     if (q->front == NULL)
     {
-        printf("Queue is empty");
         return 0;
     }
 

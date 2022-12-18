@@ -31,11 +31,37 @@ static Queue *finishedProcesses = NULL;
 /* Represents the scheduler type which is to run */
 static SchedulingAlgorithm_t schedAlgorithm = SchedulingAlgorithm_RR;
 
+/* Total processes, obtained from generator to stop the scheduler after completing all processes*/
+static int process_count = 0;
+
 /* Scheduler queues */
 static PriorityQueue *HPF_Queue = NULL;
 static PriorityQueue *SJF_Queue = NULL;
 static MultiLevelQueue *MLVL_Queue = NULL;
 static Queue *RR_Queue = NULL;
+
+void initProcSem(int *proc_sem_id, pid_t pid)
+{
+    union Semun semun;
+    int key_id = ftok("./", pid);
+
+    if (key_id == -1)
+        perror("[SCHEDULER] Error in ftok\n");
+
+    *proc_sem_id = semget(key_id, 1, 0666 | IPC_CREAT);
+
+    if (*proc_sem_id == -1)
+    {
+        perror("[SCHEDULER] Error in create sem\n");
+        exit(-1);
+    }
+    semun.val = 0; /* initial value of the semaphore, Binary semaphore */
+    if (semctl(*proc_sem_id, 0, SETVAL, semun) == -1)
+    {
+        perror("[SCHEDULER] Error in semctl\n");
+        exit(-1);
+    }
+}
 
 float calculateAverageWeightedTATime(Queue *processInfoQueue, int size)
 {
@@ -69,16 +95,67 @@ float calculateAverageWaitingTime(Queue *processInfoQueue, int size)
     return sum / size;
 }
 
-void generateSchedulerLog(Queue *lines);
-
-void generateSchedulerPerf(Queue *processInfoQueue);
-
 void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority, ProcessState state, int finishTime)
 {
     pcb->remainingTime = remainingTime;
     pcb->priority = priority;
-    pcb->state = state;
     pcb->finishTime = finishTime;
+    pcb->state = state;
+    /*
+
+        Process is just created for the first time:
+        - Fork it and pass its execution time as arg
+        - Create a semaphore for it (process stays blocked)
+
+        Process has stopped (still not finished):
+        - Down its semaphore so it's blocked
+
+        Process has resumed:
+        - Up its semaphore
+
+        Process has finished:
+        - Up its semaphore so it finishes on its own
+
+    */
+    union Semun semun;
+
+    switch (state)
+    {
+    case ProcessState_Ready:
+        if ((pcb->PID = fork()) == 0)
+        {
+            char remTime[5] = {0};
+            char inputPID[5] = {0};
+            char *processExec = "./process.out";
+
+            sprintf(remTime, "%d", pcb->executionTime);
+            sprintf(inputPID, "%d", pcb->inputPID);
+            char *args[] = {processExec, inputPID, remTime, NULL};
+            /* Process starts here */
+            execv(args[0], args);
+        }
+        initProcSem(&pcb->sem_id, pcb->PID);
+        /* Once semaphore is obtained, down it to synchronize with process*/
+        down(pcb->sem_id);
+        /* Create a semaphore for it */
+        break;
+    case ProcessState_Running:
+        up(pcb->sem_id, pcb->remainingTime);
+        break;
+    case ProcessState_Finished:
+        up(pcb->sem_id, 1);
+        break;
+    case ProcessState_Blocked:
+
+        semun.val = 0; /* initial value of the semaphore, Binary semaphore */
+        if (semctl(pcb->sem_id, 0, SETVAL, semun) == -1)
+        {
+            perror("[SCHEDULER] Error in semctl\n");
+            exit(-1);
+        }
+
+        break;
+    }
 }
 
 void printProcessInfo(ProcessControlBlock *pcb)
@@ -116,7 +193,7 @@ void output_processStartedStr(int currTime, ProcessControlBlock *pcb)
     snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tstarted arr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
              currTime, pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->remainingTime, waitingTime);
     enqueue(outputQueue, buffer);
-    DEBUG_PRINTF("%s", buffer);
+    DEBUG_PRINTF(MAG "%s" RESET, buffer);
 }
 
 void output_processStoppedStr(int currTime, ProcessControlBlock *pcb)
@@ -125,7 +202,7 @@ void output_processStoppedStr(int currTime, ProcessControlBlock *pcb)
     snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tstopped arr\t%d\ttotal\t%d\tremain\t%d\twait\t0\n",
              currTime, pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->remainingTime);
     enqueue(outputQueue, buffer);
-    DEBUG_PRINTF("%s", buffer);
+    DEBUG_PRINTF(RED "%s" RESET, buffer);
 }
 
 void output_processResumedStr(int currTime, ProcessControlBlock *pcb)
@@ -135,7 +212,7 @@ void output_processResumedStr(int currTime, ProcessControlBlock *pcb)
     snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tresumed arr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
              currTime, pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->remainingTime, waitingTime);
     enqueue(outputQueue, buffer);
-    DEBUG_PRINTF("%s", buffer);
+    DEBUG_PRINTF(CYN "%s" RESET, buffer);
 }
 
 void output_processFinishedStr(int currTime, ProcessControlBlock *pcb)
@@ -147,7 +224,7 @@ void output_processFinishedStr(int currTime, ProcessControlBlock *pcb)
     snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tfinished arr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\tTA\t%d WTA\t%.2f\n",
              currTime, pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->remainingTime, waitingTime, TA, WTA);
     enqueue(outputQueue, buffer);
-    DEBUG_PRINTF("%s", buffer);
+    DEBUG_PRINTF(GRN "%s" RESET, buffer);
 }
 
 void generateSchedulerLog(Queue *lines)
@@ -158,6 +235,8 @@ void generateSchedulerLog(Queue *lines)
     while (dequeue(lines, (void **)&line))
     {
         fputs(line, logfile);
+        /* Free dynamically allocated line*/
+        free(line);
     }
     fclose(logfile);
 }
@@ -165,19 +244,19 @@ void generateSchedulerLog(Queue *lines)
 void generateSchedulerPerf(Queue *processInfoQueue)
 {
     /* Calculate */
-    float utilizationPercent = ((float)idle_cycles / total_cycles) * 100;
+    float utilizationPercent = ((float)(total_cycles - idle_cycles) / total_cycles) * 100;
     float WTA = calculateAverageWeightedTATime(processInfoQueue, processInfoQueue->capacity);
     float avgWaiting = calculateAverageWaitingTime(processInfoQueue, processInfoQueue->capacity);
 
-    printf("\nCPU utilization = %.2f%%\nAvg WTA = %.2f\nAvg Waiting = %.1f",
+    printf("\nCPU utilization = %.2f%%\nAvg WTA = %.2f\nAvg Waiting = %.1f\n",
            utilizationPercent,
            WTA,
            avgWaiting);
 
     /* Round */
 
-    utilizationPercent = roundf(((float)utilizationPercent) * 100);
-    WTA = roundf(((float)WTA) * 100);
+    utilizationPercent = roundf(((float)utilizationPercent));
+    WTA = roundf(((float)WTA) * 100) / 100.0;
     avgWaiting = roundf(((float)avgWaiting) * 100) / 100.0;
 
     /* Write to file */
@@ -190,6 +269,30 @@ void generateSchedulerPerf(Queue *processInfoQueue)
             avgWaiting);
 
     fclose(perfFile);
+}
+
+void freeAllResources()
+{
+
+    /* Free queues */
+    destroyQueue(finishedProcesses);
+    destroyQueue(outputQueue);
+    switch (schedAlgorithm)
+    {
+    case SchedulingAlgorithm_HPF:
+        destroyPriorityQueue(HPF_Queue);
+        break;
+    case SchedulingAlgorithm_RR:
+        destroyQueue(RR_Queue);
+        break;
+    case SchedulingAlgorithm_SJF:
+        destroyPriorityQueue(SJF_Queue);
+        break;
+    case SchedulingAlgorithm_MLFL:
+        // destroyMultiLevelQueue(MLVL_Queue);
+        break;
+    }
+    // TODO free IPC
 }
 
 void scheduler_HPF()
@@ -206,12 +309,12 @@ void scheduler_HPF()
     ProcessControlBlock *currentPCB = (NULL);
     ProcessControlBlock *newPCB = (ProcessControlBlock *)malloc(sizeof(ProcessControlBlock));
     int currClk = -1;
-
+    int current_process_count = 0;
     for (;;)
     {
 
         currClk = getClk();
-        DEBUG_PRINTF("[SCHED] Current Time is %d\n", currClk);
+        DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, currClk);
 
         /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
         while (receiveMessage(&newPCB) != -1)
@@ -219,6 +322,8 @@ void scheduler_HPF()
 
             /* Enqueue new process, priority = execution time*/
             enqueuePriority(HPF_Queue, newPCB, (newPCB->priority));
+            saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
+            current_process_count++;
             newPCB->state = ProcessState_Ready;
             /* Queue was empty, */
             if (currentPCB == NULL)
@@ -253,7 +358,13 @@ void scheduler_HPF()
         }
 
         if (currentPCB == NULL)
+        {
+            if (process_count == current_process_count)
+            {
+                return;
+            }
             idle_cycles++;
+        }
         else
         {
 
@@ -266,7 +377,7 @@ void scheduler_HPF()
                                  ProcessState_Finished, currClk);
                 output_processFinishedStr(currClk, currentPCB);
                 removeNodePriority(HPF_Queue, (void **)&currentPCB);
-
+                enqueue(finishedProcesses, currentPCB);
                 currentPCB = NULL;
 
                 /* Get new process(if exists) from queue as the current is finished*/
@@ -314,14 +425,13 @@ void scheduler_SJF()
     SJF_Queue = createPriorityQueue();
     ProcessControlBlock *currentPCB = (NULL);
     ProcessControlBlock *newPCB = (ProcessControlBlock *)malloc(sizeof(ProcessControlBlock));
-    ProcessControlBlock *frontPCB = NULL;
     int currClk = -1;
 
     for (;;)
     {
 
         currClk = getClk();
-        DEBUG_PRINTF("[SCHED] Current Time is %d\n", currClk);
+        DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, currClk);
 
         /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
         while (receiveMessage(&newPCB) != -1)
@@ -329,6 +439,8 @@ void scheduler_SJF()
 
             /* Enqueue new process, priority = execution time*/
             enqueuePriority(SJF_Queue, newPCB, (newPCB->executionTime));
+            saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
+
             newPCB->state = ProcessState_Ready;
             /* Queue was empty, */
             if (currentPCB == NULL)
@@ -357,7 +469,7 @@ void scheduler_SJF()
                                  ProcessState_Finished, currClk);
                 output_processFinishedStr(currClk, currentPCB);
                 removeNodePriority(SJF_Queue, (void **)&currentPCB);
-
+                enqueue(finishedProcesses, currentPCB);
                 currentPCB = NULL;
 
                 /* Get new process(if exists) from queue as the current is finished*/
@@ -391,27 +503,27 @@ void scheduler_RR(int quantum)
     // signal old process to stop
     // signal new process to start
     RR_Queue = createQueue();
-    finishedProcesses = createQueue();
 
     ProcessControlBlock *currentPCB = NULL;
     ProcessControlBlock *newPCB = NULL;
 
     int prevClk = -1;
     int quantum_passed = 0;
+    int current_process_count = 0;
     // int mtype = -1;
 
     for (;;)
     {
 
         prevClk = getClk();
-        DEBUG_PRINTF("[SCHED] Current Time is %d\n", prevClk);
+        DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, prevClk);
 
         /* New process has just arrived, put it at the back of queue*/
         while (receiveMessage(&newPCB) != -1)
         {
-            printProcessInfo(newPCB);
+            current_process_count++;
             enqueue(RR_Queue, newPCB);
-            newPCB->state = ProcessState_Ready;
+            saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
             /* Queue was empty, */
             if (currentPCB == NULL)
             {
@@ -424,6 +536,10 @@ void scheduler_RR(int quantum)
 
         if (!currentPCB)
         {
+            if (process_count == current_process_count)
+            {
+                return;
+            }
             idle_cycles++;
         }
         else
@@ -447,7 +563,7 @@ void scheduler_RR(int quantum)
                 /* Remove the process from the queue */
                 dequeue(RR_Queue, (void **)&currentPCB);
 
-                enqueue(finishedProcesses, &currentPCB);
+                enqueue(finishedProcesses, currentPCB);
 
                 if (!peek(RR_Queue, (void **)&currentPCB))
                 {
@@ -466,7 +582,7 @@ void scheduler_RR(int quantum)
                     else
                         output_processResumedStr(prevClk, currentPCB);
 
-                    currentPCB->state = ProcessState_Running;
+                    saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                 }
             }
         }
@@ -515,29 +631,17 @@ void scheduler_RR(int quantum)
         total_cycles++;
         while (prevClk == getClk())
             ;
-        if (prevClk == 15)
-        {
-            printf("AAAAAA");
-        }
     }
-    DEBUG_PRINTF("FINISHED\n");
 }
 
 void scheduler_MLFL() {}
-
-void newProcess_Handler(int signum)
-{
-}
 
 void processFinished_Handler(int signum) {}
 
 void SIGINT_Handler(int signum)
 {
-    // TODO free all resources
-    generateSchedulerLog(outputQueue);
-    generateSchedulerPerf(finishedProcesses);
-    destroyClk(true);
-    exit(0);
+    DEBUG_PRINTF("[SCHEDULER] Freeing resources...\n");
+    freeAllResources();
 }
 
 void getProcessMessageQueue()
@@ -556,7 +660,9 @@ void getProcessMessageQueue()
 
 int main(int argc, char *argv[])
 {
-    DEBUG_PRINTF("[SCHEDULER] Scheduler started...\n");
+    int RR_quantum;
+
+    DEBUG_PRINTF(BLU "[SCHEDULER] Scheduler started...\n");
 
     initClk();
 
@@ -564,34 +670,56 @@ int main(int argc, char *argv[])
     setvbuf(stderr, NULL, _IONBF, 0);
 
     signal(SIGINT, SIGINT_Handler);
-    signal(SIGUSR1, newProcess_Handler);
 
-    // Initialize output queue
+    /* Initialize output queue*/
     outputQueue = createQueue();
+    finishedProcesses = createQueue();
+
+    /* Initialize message queue between generator & scheduler */
     getProcessMessageQueue();
 
-    schedAlgorithm = (SchedulingAlgorithm_t)atoi(argv[1]);
-    int RR_quantum;
+    process_count = atoi(argv[3]);
 
-    // TODO: implement the scheduler.
+    /* Get scheduling algorithm to run from arguments passed from generator */
+    schedAlgorithm = (SchedulingAlgorithm_t)atoi(argv[1]);
+
     switch (schedAlgorithm)
     {
     case SchedulingAlgorithm_HPF:
+        DEBUG_PRINTF("[SCHEDULER] Starting HPF...\n");
         scheduler_HPF();
+        DEBUG_PRINTF("[SCHEDULER] Stopping HPF...\n");
         break;
     case SchedulingAlgorithm_RR:
+        DEBUG_PRINTF("[SCHEDULER] Starting RR...\n");
         RR_quantum = atoi(argv[2]);
         scheduler_RR(RR_quantum);
+        DEBUG_PRINTF("[SCHEDULER] Stopping RR...\n");
         break;
     case SchedulingAlgorithm_SJF:
+        DEBUG_PRINTF("[SCHEDULER] Starting SJF...\n");
         scheduler_SJF();
+        DEBUG_PRINTF("[SCHEDULER] Stopping SJF...\n");
         break;
     case SchedulingAlgorithm_MLFL:
+        DEBUG_PRINTF("[SCHEDULER] Starting MLFL...\n");
         scheduler_MLFL();
+        DEBUG_PRINTF("[SCHEDULER] Stopping MLFL...\n");
         break;
     }
 
     // TODO: upon termination release the clock resources.
+    DEBUG_PRINTF("[SCHEDULER] Terminated normally...\n");
+
+    DEBUG_PRINTF("[SCHEDULER] Logging output...\n");
+
+    generateSchedulerLog(outputQueue);
+
+    generateSchedulerPerf(finishedProcesses);
+
+    DEBUG_PRINTF("[SCHEDULER] Freeing resources...\n");
 
     destroyClk(true);
+
+    exit(0);
 }
