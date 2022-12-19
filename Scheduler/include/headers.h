@@ -49,11 +49,11 @@ typedef short bool;
 int *shmaddr; //
 //===============================
 
-int getClk()
-{
-    return *shmaddr;
-}
-
+/**
+ * @brief   Semaphore down operation. Decrements the semaphore value by 1
+ *
+ * @param sem       Semaphore ID
+ */
 void down(int sem)
 {
     struct sembuf p_op;
@@ -69,7 +69,12 @@ void down(int sem)
     }
 }
 
-
+/**
+ * @brief   Semaphore up operation. Adds the value of up_val: -ve/+ve
+ *
+ * @param sem       Semaphore ID
+ * @param up_val    Value to add to semaphore value
+ */
 void up(int sem, int up_val)
 {
     struct sembuf v_op;
@@ -85,6 +90,10 @@ void up(int sem, int up_val)
     }
 }
 
+int getClk()
+{
+    return *shmaddr;
+}
 /*
  * All processes call this function at the beginning to establish communication between them and the clock module.
  * Again, remember that the clock is only emulation!

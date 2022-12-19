@@ -40,6 +40,15 @@ static PriorityQueue *SJF_Queue = NULL;
 static MultiLevelQueue *MLVL_Queue = NULL;
 static Queue *RR_Queue = NULL;
 
+/************************************************* IPC functions *************************************************/
+
+/**
+ * @brief   Initializes the semaphore between scheduler and process
+ *
+ * @param proc_sem_id   Process semaphore ID
+ * @param pid           PID of the process, used as key to get the semaphore ID
+ * @post  proc_sem_id   New process semaphore ID unique for the given PID
+ */
 void initProcSem(int *proc_sem_id, pid_t pid)
 {
     union Semun semun;
@@ -63,6 +72,96 @@ void initProcSem(int *proc_sem_id, pid_t pid)
     }
 }
 
+/**
+ * @brief   Deinitializes the semaphore between scheduler and process
+ *
+ * @param proc_sem_id   Process semaphore ID
+ */
+void deInitProcSem(int *proc_sem_id)
+{
+    union Semun semun;
+    if (semctl(*proc_sem_id, 0, IPC_RMID, semun) == -1)
+    {
+        perror("[SCHEDULER] Error in semctl - deInitProcSem()\n");
+        exit(-1);
+    }
+}
+
+/**
+ * @brief Frees all resources used by the schedule. Does NOT terminate processes, just frees dynamic memory & IPC resources.
+ *
+ */
+void freeAllResources()
+{
+
+    /* Free queues */
+    destroyQueue(finishedProcesses);
+    destroyQueue(outputQueue);
+    switch (schedAlgorithm)
+    {
+    case SchedulingAlgorithm_HPF:
+        destroyPriorityQueue(HPF_Queue);
+        break;
+    case SchedulingAlgorithm_RR:
+        destroyQueue(RR_Queue);
+        break;
+    case SchedulingAlgorithm_SJF:
+        destroyPriorityQueue(SJF_Queue);
+        break;
+    case SchedulingAlgorithm_MLFL:
+        destroyMultiLevelQueue(MLVL_Queue);
+        break;
+    }
+    // TODO free IPC
+    ProcessControlBlock *pcb;
+    Node *ptr = finishedProcesses->front;
+    while (ptr)
+    {
+        pcb = (ProcessControlBlock *)ptr->dataPtr;
+        deInitProcSem(&pcb->sem_id);
+        free(pcb);
+        ptr = ptr->nextNode;
+    }
+}
+
+/**
+ * @brief Handler for SIGINT interrupt to handle interrupts when the process generator is interrupted.
+ *
+ * @param signum
+ */
+void SIGINT_Handler(int signum)
+{
+    DEBUG_PRINTF("[SCHEDULER] Freeing resources...\n");
+    freeAllResources();
+}
+
+/**
+ * @brief Get the Process Message Queue object
+ *
+ */
+void getProcessMessageQueue()
+{
+
+    if (-1 == (proc_msgq = msgget(MSGQKEY, IPC_CREAT | 0666)))
+    {
+        perror("[SCHEDULER] Could not get message queue...");
+        exit(-1);
+    }
+    else
+    {
+        DEBUG_PRINTF("[SCHEDULER] Message queue ID = %d\n", proc_msgq);
+    }
+}
+
+/************************************************* Logging functions *************************************************/
+
+/**
+ * @brief   Calculates the average weighted turn-around time given by TA/RT.
+ *
+ * @param processInfoQueue  Queue with all processes
+ * @param size              Number of processes
+ * @return float            Average weighted TA time
+ */
 float calculateAverageWeightedTATime(Queue *processInfoQueue, int size)
 {
     ProcessControlBlock *pcb;
@@ -72,7 +171,7 @@ float calculateAverageWeightedTATime(Queue *processInfoQueue, int size)
     float sum = 0;
     while (ptr)
     {
-        pcb = ptr->dataPtr;
+        pcb = (ProcessControlBlock *)ptr->dataPtr;
         TA = (pcb->finishTime - pcb->arrivalTime);
         RT = pcb->executionTime;
         sum = sum + (TA / RT);
@@ -81,6 +180,13 @@ float calculateAverageWeightedTATime(Queue *processInfoQueue, int size)
     return sum / size;
 }
 
+/**
+ * @brief   Calculates the average waiting time for a process given by (finish time - arrival time) - execution time
+ *
+ * @param processInfoQueue  Queue with all processes
+ * @param size              Number of processes
+ * @return float            Average waiting time for all processes
+ */
 float calculateAverageWaitingTime(Queue *processInfoQueue, int size)
 {
     float sum = 0;
@@ -88,13 +194,22 @@ float calculateAverageWaitingTime(Queue *processInfoQueue, int size)
     Node *ptr = processInfoQueue->front;
     while (ptr)
     {
-        pcb = ptr->dataPtr;
+        pcb = (ProcessControlBlock *)ptr->dataPtr;
         sum = sum + ((pcb->finishTime - pcb->arrivalTime) - pcb->executionTime);
         ptr = ptr->nextNode;
     }
     return sum / size;
 }
 
+/**
+ * @brief Saves the process state and manages its semaphore.
+ *
+ * @param pcb           Pointer to process control block
+ * @param remainingTime Remaining time of the process
+ * @param priority      Priority of the process
+ * @param state         New state of the process
+ * @param finishTime    Finish time (if applicable)
+ */
 void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority, ProcessState state, int finishTime)
 {
     pcb->remainingTime = remainingTime;
@@ -126,7 +241,7 @@ void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority,
         {
             char remTime[5] = {0};
             char inputPID[5] = {0};
-            char *processExec = "./process.out";
+            char *processExec = (char*)"./process.out";
 
             sprintf(remTime, "%d", pcb->executionTime);
             sprintf(inputPID, "%d", pcb->inputPID);
@@ -158,6 +273,11 @@ void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority,
     }
 }
 
+/**
+ * @brief   Prints the process information
+ *
+ * @param pcb   Pointer to process control block
+ */
 void printProcessInfo(ProcessControlBlock *pcb)
 {
     DEBUG_PRINTF("===================\n");
@@ -166,6 +286,14 @@ void printProcessInfo(ProcessControlBlock *pcb)
     DEBUG_PRINTF("===================\n");
 }
 
+/**
+ * @brief   Receives a new process from the message queue between scheduler and process generator
+ *
+ * @param pcb   Pointer to process control block
+ * @return int  Status of message
+ * @return -1   No message/Error
+ * @return !=-1 New message
+ */
 int receiveMessage(ProcessControlBlock **pcbToGet)
 {
     struct msgbuf newMsg;
@@ -186,6 +314,12 @@ int receiveMessage(ProcessControlBlock **pcbToGet)
     return ret;
 }
 
+/**
+ * @brief   Outputs the process started string and queues it to the output queue
+ *
+ * @param currTime  Start time of the process
+ * @param pcb       Pointer to process control block
+ */
 void output_processStartedStr(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
@@ -196,6 +330,12 @@ void output_processStartedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF(MAG "%s" RESET, buffer);
 }
 
+/**
+ * @brief   Outputs the process stopped string and queues it to the output queue
+ *
+ * @param currTime  Stop/pause time of the process
+ * @param pcb       Pointer to process control block
+ */
 void output_processStoppedStr(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
@@ -205,6 +345,12 @@ void output_processStoppedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF(RED "%s" RESET, buffer);
 }
 
+/**
+ * @brief   Outputs the process resumed string and queues it to the output queue
+ *
+ * @param currTime  Resume time of the process
+ * @param pcb       Pointer to process control block
+ */
 void output_processResumedStr(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
@@ -215,6 +361,12 @@ void output_processResumedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF(CYN "%s" RESET, buffer);
 }
 
+/**
+ * @brief   Outputs the process finished string and queues it to the output queue
+ *
+ * @param currTime  Finish time of the process
+ * @param pcb       Pointer to process control block
+ */
 void output_processFinishedStr(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
@@ -227,6 +379,11 @@ void output_processFinishedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF(GRN "%s" RESET, buffer);
 }
 
+/**
+ * @brief   Generates the scheduler log using the lines queue. Writes to "SCHEDULER_LOG_FILENAME" file
+ *
+ * @param lines Queue which includes lines to output
+ */
 void generateSchedulerLog(Queue *lines)
 {
     FILE *logfile = fopen(SCHEDULER_LOG_FILENAME, "w");
@@ -241,6 +398,11 @@ void generateSchedulerLog(Queue *lines)
     fclose(logfile);
 }
 
+/**
+ * @brief   Generates the scheduler performance log. It includes average WTA, average waiting time, & CPU utilization %.
+ *
+ * @param processInfoQueue  Queue which contains all processes' PCBs
+ */
 void generateSchedulerPerf(Queue *processInfoQueue)
 {
     /* Calculate */
@@ -271,29 +433,7 @@ void generateSchedulerPerf(Queue *processInfoQueue)
     fclose(perfFile);
 }
 
-void freeAllResources()
-{
-
-    /* Free queues */
-    destroyQueue(finishedProcesses);
-    destroyQueue(outputQueue);
-    switch (schedAlgorithm)
-    {
-    case SchedulingAlgorithm_HPF:
-        destroyPriorityQueue(HPF_Queue);
-        break;
-    case SchedulingAlgorithm_RR:
-        destroyQueue(RR_Queue);
-        break;
-    case SchedulingAlgorithm_SJF:
-        destroyPriorityQueue(SJF_Queue);
-        break;
-    case SchedulingAlgorithm_MLFL:
-        // destroyMultiLevelQueue(MLVL_Queue);
-        break;
-    }
-    // TODO free IPC
-}
+/************************************************* Schedulers *************************************************/
 
 void scheduler_HPF()
 {
@@ -634,30 +774,205 @@ void scheduler_RR(int quantum)
     }
 }
 
-void scheduler_MLFL() {}
-
-void processFinished_Handler(int signum) {}
-
-void SIGINT_Handler(int signum)
+void scheduler_MLFL(int quantum)
 {
-    DEBUG_PRINTF("[SCHEDULER] Freeing resources...\n");
-    freeAllResources();
+    MLVL_Queue = createMultiLevelQueue();
+    PriorityQueue *reconstructing_buffer = createPriorityQueue();
+    // Receieve Process with priority X
+    // enqueue that process in the MLVL_Queue
+    // check for any levels above this process
+    // if there's an occupied level whose priority higher (less in number) than the current process , and start with that level
+    // if the current process is that of higher priority , run it for its quanta
+    // case 1 : if the process remaining time = 0 , dequeue it from the mlfl permenantly and restart level with the occupied level
+    // case 2 : if the (quanta finished) process has still remaining time , dequeue it and enqueue it in the next level and restart level with occupied level
+    // if we reached level 10 and there are still processes that hasn't been yet finished , reconstruct the mlvl queue
+    ProcessControlBlock *currentPCB = NULL;
+    ProcessControlBlock *newPCB = NULL;
+
+    int prevClk = -1;
+    int currentOccupiedLevel, newOccupiedLevel;
+    currentOccupiedLevel = newOccupiedLevel = -1;
+    int quantum_passed = 0;
+    int current_process_count = 0;
+
+    for (;;)
+    {
+
+        prevClk = getClk();
+        DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, prevClk);
+
+        /* New process has just arrived, put it at the back of queue*/
+        while (receiveMessage(&newPCB) != -1)
+        {
+            current_process_count++;
+            enqueueMultiLevel(MLVL_Queue, (void **)&newPCB, newPCB->priority);
+            printf("[MLFL] : Enqueued Process \n");
+            newOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
+            printf("%d\n", newOccupiedLevel);
+            saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
+            /* Queue was empty, */
+            if (currentOccupiedLevel == -1)
+            {
+                currentPCB = newPCB;
+                // save the first occupied level to start with in the next quantam
+                currentOccupiedLevel = newOccupiedLevel;
+                currentPCB->startTime = prevClk;
+                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                output_processStartedStr(prevClk, currentPCB);
+            }
+        }
+
+        // while no current pcb running and the multilevel queue is empty , then ideal cycles ++
+        if (!currentPCB && currentOccupiedLevel == -1)
+        {
+            if (process_count == current_process_count)
+            {
+                return;
+            }
+            idle_cycles++;
+        }
+        else
+        {
+            for (int i = currentOccupiedLevel; i < 11; i++)
+            {
+
+                if (currentPCB->remainingTime == 0)
+                {
+                    /* Reset quantum passed as we will start a new process */
+                    quantum_passed = 0;
+
+                    saveProcessState(currentPCB, 0,
+                                     currentPCB->priority, ProcessState_Finished, prevClk);
+
+                    output_processFinishedStr(prevClk, currentPCB);
+
+                    /* Remove the process from the MLVL permenantly */
+                    dequeueMultiLevel(MLVL_Queue, (void **)&currentPCB, currentPCB->priority);
+
+                    enqueue(finishedProcesses, currentPCB);
+
+                    currentOccupiedLevel = newOccupiedLevel;
+
+                    if (currentOccupiedLevel == -1)
+                    {
+                        /* No more processes for now and all levels are empty*/
+                        currentPCB = NULL;
+                    }
+                    else
+                    {
+                        // if I still have processes in that level and no other levels are higher than me , continue fetching in that level
+                        if (!isEmpty(MLVL_Queue->Qptrs[i]) && currentOccupiedLevel >= i)
+                        {
+                            /* Get next process and run it */
+                            peek(MLVL_Queue->Qptrs[i], (void **)&currentPCB);
+                            // Process is starting for the first time
+                            if (currentPCB->state == ProcessState_Ready)
+                            {
+                                currentPCB->startTime = prevClk;
+                                output_processStartedStr(prevClk, currentPCB);
+                            }
+                            else
+                                output_processResumedStr(prevClk, currentPCB);
+                        }
+                        // there's a level with high priority arrived
+                        else
+                        {
+                            // this means a new process entered while am working down here , assume ready and run it
+                            peek(MLVL_Queue->Qptrs[currentOccupiedLevel], (void **)&currentPCB);
+                            currentPCB->startTime = prevClk;
+                        }
+
+                        saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                    }
+                }
+
+                /* 1 quantum has just passed, schedule next process */
+                if (quantum_passed == quantum)
+                {
+                    /* Save the process */
+                    saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Blocked, 0);
+                    output_processStoppedStr(prevClk, currentPCB);
+                    dequeueMultiLevel(MLVL_Queue, (void **)currentPCB, i);
+                    if (i == 10)
+                    {
+                        enqueuePriority(reconstructing_buffer, currentPCB, currentPCB->priority);
+                    }
+                    else
+                    {
+                        enqueueMultiLevel(MLVL_Queue, (void **)&currentPCB, i + 1);
+                    }
+                    /* Get the highest level now*/
+                    currentOccupiedLevel = newOccupiedLevel;
+                    // if the current level is still not empty and no higher priority processes have arrived
+                    if (!isEmpty(MLVL_Queue->Qptrs[i]) && i <= currentOccupiedLevel)
+                    {
+                        // get Next process in the queue and run it
+
+                        /* Get new process */
+                        peek(MLVL_Queue->Qptrs[i], (void **)&currentPCB);
+
+                        // Process is starting for the first time
+                        if (currentPCB->state == ProcessState_Ready)
+                        {
+                            currentPCB->startTime = prevClk;
+                            output_processStartedStr(prevClk, currentPCB);
+                        }
+                        else
+                            output_processResumedStr(prevClk, currentPCB);
+
+                        saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                    }
+                    else
+                    {
+                        // Then go to that level and run the higher priority process
+                        peek(MLVL_Queue->Qptrs[currentOccupiedLevel], (void **)&currentPCB);
+                        currentPCB->startTime = prevClk;
+                    }
+                    /* Reset quantum passed as we will start a new process */
+                    quantum_passed = 0;
+                }
+                break;
+            }
+            if (currentPCB)
+            {
+                currentPCB->remainingTime--;
+                quantum_passed++;
+            }
+            else
+            {
+                // reconstruct the multilevel if found any processes that haven't done yet
+                // منطقة هبد عالي
+                if (!priorityIsEmpty(reconstructing_buffer))
+                {
+                    PrioNode *temp = reconstructing_buffer->front;
+                    while (temp)
+                    {
+                        dequeuePriority(reconstructing_buffer, (void **)&currentPCB);
+                        enqueueMultiLevel(MLVL_Queue, (void **)&currentPCB, currentPCB->priority);
+                        currentOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
+                    }
+                }
+            }
+            total_cycles++;
+        }
+        /* There is currently a process in execution, decrement its remaining time*/
+
+        while (prevClk == getClk())
+            ;
+    }
 }
 
-void getProcessMessageQueue()
-{
+/************************************************* Main program *************************************************/
 
-    if (-1 == (proc_msgq = msgget(MSGQKEY, IPC_CREAT | 0666)))
-    {
-        perror("[SCHEDULER] Could not get message queue...");
-        exit(-1);
-    }
-    else
-    {
-        DEBUG_PRINTF("[SCHEDULER] Message queue ID = %d\n", proc_msgq);
-    }
-}
-
+/**
+ * @brief
+ *
+ * @param argc Argument count
+ * @param argv Argument vector:
+ *        argv[1]:  Scheduling algorithm number (1-4)
+ *        argv[2]:  Quantum time for either RR or MLFL algorithms (optional argument)
+ * @return int
+ */
 int main(int argc, char *argv[])
 {
     int RR_quantum;
@@ -665,10 +980,13 @@ int main(int argc, char *argv[])
     DEBUG_PRINTF(BLU "[SCHEDULER] Scheduler started...\n");
 
     initClk();
-
+    /* Sets stdout & stderr to be unbuffered -
+        to output at any time without needing \n character
+    */
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
+    /* Attach signal handler to SIGINT*/
     signal(SIGINT, SIGINT_Handler);
 
     /* Initialize output queue*/
@@ -703,7 +1021,8 @@ int main(int argc, char *argv[])
         break;
     case SchedulingAlgorithm_MLFL:
         DEBUG_PRINTF("[SCHEDULER] Starting MLFL...\n");
-        scheduler_MLFL();
+        RR_quantum = atoi(argv[2]);
+        scheduler_MLFL(RR_quantum);
         DEBUG_PRINTF("[SCHEDULER] Stopping MLFL...\n");
         break;
     }
@@ -711,13 +1030,17 @@ int main(int argc, char *argv[])
     // TODO: upon termination release the clock resources.
     DEBUG_PRINTF("[SCHEDULER] Terminated normally...\n");
 
+    /* Generate logs */
     DEBUG_PRINTF("[SCHEDULER] Logging output...\n");
 
     generateSchedulerLog(outputQueue);
 
     generateSchedulerPerf(finishedProcesses);
 
+    /* Free resources */
     DEBUG_PRINTF("[SCHEDULER] Freeing resources...\n");
+
+    freeAllResources();
 
     destroyClk(true);
 

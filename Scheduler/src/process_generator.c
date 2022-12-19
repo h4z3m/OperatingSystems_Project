@@ -6,7 +6,10 @@
 static int proc_msgq = 0;
 
 void clearResources(int);
-
+/**
+ * @brief Creates a new process with given data, and returns a pointer to it.
+ *
+ */
 ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime /*,int memSize*/, int priority)
 {
     ProcessControlBlock *newProcess = (ProcessControlBlock *)calloc(
@@ -20,7 +23,31 @@ ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime /
     return newProcess;
 }
 
-int readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
+/**
+ * @brief De-allocates the process array along with the processes inside it
+ *
+ * @param array Process array
+ * @param count Processes count
+ */
+void destroyProcessArray(ProcessControlBlock **array, int count)
+{
+    ProcessControlBlock *pcb;
+    for (int i = 0; i < count; i++)
+    {
+        pcb = array[i];
+        free(pcb);
+    }
+    free(array);
+}
+
+/**
+ * @brief Reads the input file which contains the processes
+ *
+ * @param fileName          Filename
+ * @param processInfoArray  Array which will contain new processes
+ * @return int              Process count which was read from file
+ */
+int readInputFile(char *fileName, ProcessControlBlock ***processInfoArray)
 {
     FILE *ptr = fopen(fileName, "r");
     char ch;
@@ -37,9 +64,20 @@ int readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
 
     if (NULL == ptr)
     {
-        DEBUG_PRINTF("[PROCGEN] File can't be opened.\n");
+        perror("[PROCGEN] Input file can't be opened.\n");
         exit(-1);
     }
+
+    /* Count the number of processes, skip comments*/
+    char c;
+    for (c = getc(ptr); c != EOF; c = getc(ptr))
+        if (c == '\n')
+            processCount++;
+        else if (c == '#')
+            while (c = fgetc(ptr), c != '\n' && c != EOF)
+                ;
+    rewind(ptr);
+    *processInfoArray = (ProcessControlBlock **)malloc(sizeof(ProcessControlBlock *) * processCount);
 
     do
     {
@@ -79,8 +117,7 @@ int readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
             {
                 if (i != -1)
                 {
-                    processInfoArray[i] = createProcess(id, arrival, runtime, input);
-                    processCount++;
+                    (*processInfoArray)[i] = createProcess(id, arrival, runtime, input);
                 }
                 isReadingComment = false;
                 states = 0;
@@ -111,6 +148,12 @@ int readInputFile(char *fileName, ProcessControlBlock *processInfoArray[])
     return processCount;
 }
 
+/**
+ * @brief Get the Scheduler Algorithm object
+ *
+ * @param algorithmNum              Algorithm number as character
+ * @return SchedulingAlgorithm_t    Scheduling algorithm type
+ */
 SchedulingAlgorithm_t getSchedulerAlgorithm(char algorithmNum)
 {
     if (algorithmNum == '1')
@@ -128,6 +171,15 @@ SchedulingAlgorithm_t getSchedulerAlgorithm(char algorithmNum)
     return SchedulingAlgorithm_HPF;
 }
 
+/**
+ * @brief   Sends a message to the scheduler with the given process.
+ *
+ * @param pcbToSend Pointer to process to send
+ * @param mtype     Message type
+ * @return int      Status of sending operation in message queue
+ * @return -1       Fail/Error
+ * @return !=-1     Success
+ */
 int sendMessage(ProcessControlBlock *pcbToSend, long mtype)
 {
     struct msgbuf buff = {0};
@@ -150,8 +202,10 @@ int sendMessage(ProcessControlBlock *pcbToSend, long mtype)
     return ret;
 }
 
-
-
+/**
+ * @brief   Initializes the message queue between the scheduler and process generator
+ *
+ */
 void initMessageQueue()
 {
     if (-1 == (proc_msgq = msgget(MSGQKEY, IPC_CREAT | 0666)))
@@ -163,23 +217,40 @@ void initMessageQueue()
     DEBUG_PRINTF("[PROCGEN] Message queue ID = %d\n", proc_msgq);
 }
 
+/**
+ * @brief
+ *
+ * @param argc  Argument count
+ * @param argv  Argument vector
+ *        argv[1]:  Path to processes input file
+ *        argv[2]:  "-sch"  Scheduler ID opt
+ *        argv[3]:  Algorithm number (1-4)
+ *        argv[4]:  "-q"    Quantum time opt
+ *        argv[5]:  Quantum time for RR or MLFL if they were selected
+ * @return int
+ */
 int main(int argc, char *argv[])
 {
-
+    /* Sets stdout & stderr to be unbuffered -
+        to output at any time without needing \n character
+    */
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
+    /* Attach signal handler to SIGINT*/
     signal(SIGINT, clearResources);
+
     int RR_quantum;
+    /* Get input filename from input arguments*/
     char *process_filename = argv[1];
     if (argc == 6)
         RR_quantum = atoi(argv[5]);
 
     // 1. Read the input files.
 
-    ProcessControlBlock **process_array = (ProcessControlBlock **)malloc(sizeof(ProcessControlBlock *) * 100);
+    ProcessControlBlock **process_array = NULL;
 
-    int process_count = readInputFile(process_filename, process_array);
+    int process_count = readInputFile(process_filename, &process_array);
     DEBUG_PRINTF("[PROCGEN] Processes = %d\n", process_count);
     initMessageQueue();
 
@@ -189,26 +260,34 @@ int main(int argc, char *argv[])
 
     // 3. Initiate and create the scheduler and clock processes.
 
+    /* Argument buffers */
     char schede[5] = {0};
     char quantum[5] = {0};
     char proc_count[5] = {0};
-    char *schedexec = "./scheduler.out";
-    // sprintf(schede, "%d", sched);
-    // sprintf(quantum, "%d", RR_quantum);
-    sprintf(schede, "2");
-    sprintf(quantum, "%d", 4);
+    char *schedexec = (char*)"./scheduler.out";
+
+    // sprintf(schede, "4");
+    // sprintf(quantum, "%d", 4);
+
+    /* Format arguments as character numbers */
+    sprintf(schede, "%d", sched);
+    sprintf(quantum, "%d", RR_quantum);
     sprintf(proc_count, "%d", process_count);
-    char *args[] = {schedexec, schede, quantum, proc_count, NULL};
+    char *schedargs[] = {schedexec, schede, quantum, proc_count, NULL};
 
     // Create clk process
+
+    /* Argument buffers */
+    char clkexec[] = "clk.out";
+    char *clkargs[] = {clkexec, NULL};
     pid_t clk_pid = fork();
     if (clk_pid == 0)
-        execv("./clk.out", NULL);
+        execv(clkargs[0], clkargs);
 
     // Create scheduler process
     pid_t scheduler_pid = fork();
     if (scheduler_pid == 0)
-        execv(args[0], args);
+        execv(schedargs[0], schedargs);
 
     // 4. Use this function after creating the clock process to initialize clock.
 
@@ -264,12 +343,21 @@ CLEAR_RESOURCES:
     // 7. Clear clock resources
     clearResources(0);
 }
+
+/**
+ * @brief   - Clears the resources used by the process generator.
+ *          - Destroys the clock and signals all child processes to terminate.
+ *          - Destroys the message queue between scheduler and process generator
+ *          - Frees the processes array
+ * @param signum    Signal number
+ */
 void clearResources(int signum)
 {
     // TODO Clears all resources in case of interruption
     DEBUG_PRINTF("[PROCGEN] Terminating...\n");
 
     destroyClk(true);
+
     msgctl(proc_msgq, IPC_RMID, (struct msqid_ds *)0);
     exit(0);
 }

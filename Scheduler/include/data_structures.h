@@ -40,9 +40,10 @@ typedef struct
 
 typedef struct
 {
-    int levels;
-    Queue queues[11];
+    // we need an array of pointers of type queue
+    Queue *Qptrs[11];
 } MultiLevelQueue;
+
 
 /* Queue */
 Queue *createQueue();
@@ -75,12 +76,15 @@ bool dequeueCircular(CircularQueue *q, void *deleted_data);
 void destroyCircularQueue(CircularQueue *q);
 
 /* Multi level Queue*/
-MultiLevelQueue *createMultiLevelQueue(int levels);
+MultiLevelQueue *createMultiLevelQueue();
 
-bool multiLevelisEmpty(MultiLevelQueue *q);
-void enqueueMultiLevel(MultiLevelQueue *q, void **dataPtr);
-bool peekMultiLevel(MultiLevelQueue *q, void **out_data);
-bool dequeueMultiLevel(MultiLevelQueue *q, int level, void **out_data);
+//enqueue item in certain level
+void enqueueMultiLevel(MultiLevelQueue *q, void **dataPtr, int priority_level);
+//dequeue item in chosen level 
+bool dequeueMultiLevel(MultiLevelQueue *q, void **out_data,  int priority_level);
+// this function returns the first occupied level in the queue , otherwise ; it returns -1
+int multiLevelisEmpty(MultiLevelQueue *q);
+// destroys multilevel by destroying each queue
 void destroyMultiLevelQueue(MultiLevelQueue *q);
 
 #endif // DATA_STRUCTURES_H

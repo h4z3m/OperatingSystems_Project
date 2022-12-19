@@ -352,3 +352,46 @@ void destroyCircularQueue(CircularQueue *q)
 }
 
 /************************************************* Multilevel Queue *************************************************/
+MultiLevelQueue *createMultiLevelQueue()
+{
+    // all 11 levels (priority from 0 to 10) levels are pointing to null
+    MultiLevelQueue *mlfl = (MultiLevelQueue *)malloc(sizeof(MultiLevelQueue));
+    for (int i = 0; i < 11; i++)
+    {
+        mlfl->Qptrs[i] = NULL;
+    }
+    return mlfl;
+}
+
+// this function returns the first occupied level in the queue , otherwise ; it returns -1
+int multiLevelisEmpty(MultiLevelQueue *q)
+{
+    int first_occupied_level = -1;
+    for (int i = 0; i < 11; i++)
+    {
+        if (!isEmpty(q->Qptrs[i]))
+        {
+            return first_occupied_level = i;
+        }
+    }
+    return first_occupied_level;
+}
+// uses queue DS to enqueue in the correct level
+void enqueueMultiLevel(MultiLevelQueue *q, void **dataPtr, int priority_level)
+{
+    return enqueue(q->Qptrs[priority_level], *dataPtr);
+}
+
+// dequeue in case of process done
+bool dequeueMultiLevel(MultiLevelQueue *q, void **out_data, int priority_level)
+{
+    return dequeue(q->Qptrs[priority_level], out_data);
+}
+
+void destroyMultiLevelQueue(MultiLevelQueue *q)
+{
+    for (int i = 0; i < 11; i++)
+    {
+        destroyQueue(q->Qptrs[i]);
+    }
+}
