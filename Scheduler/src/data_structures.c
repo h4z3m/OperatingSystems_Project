@@ -358,7 +358,8 @@ MultiLevelQueue *createMultiLevelQueue()
     MultiLevelQueue *mlfl = (MultiLevelQueue *)malloc(sizeof(MultiLevelQueue));
     for (int i = 0; i < 11; i++)
     {
-        mlfl->Qptrs[i] = NULL;
+        Queue *newQueuePtr = createQueue();
+        mlfl->Qptrs[i] = newQueuePtr;
     }
     return mlfl;
 }
@@ -369,10 +370,8 @@ int multiLevelisEmpty(MultiLevelQueue *q)
     int first_occupied_level = -1;
     for (int i = 0; i < 11; i++)
     {
-        if (!isEmpty(q->Qptrs[i]))
-        {
+        if(q->Qptrs[i]->front!=NULL)
             return first_occupied_level = i;
-        }
     }
     return first_occupied_level;
 }

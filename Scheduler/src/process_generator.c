@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
     char schede[5] = {0};
     char quantum[5] = {0};
     char proc_count[5] = {0};
-    char *schedexec = (char*)"./scheduler.out";
+    char *schedexec = (char *)"./scheduler.out";
 
     // sprintf(schede, "4");
     // sprintf(quantum, "%d", 4);

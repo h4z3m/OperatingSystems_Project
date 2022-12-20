@@ -93,7 +93,10 @@ void deInitProcSem(int *proc_sem_id)
  */
 void freeAllResources()
 {
-
+    static bool freed_flag = false;
+    if (freed_flag)
+        return;
+    freed_flag = true;
     /* Free queues */
     destroyQueue(finishedProcesses);
     destroyQueue(outputQueue);
@@ -241,7 +244,7 @@ void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority,
         {
             char remTime[5] = {0};
             char inputPID[5] = {0};
-            char *processExec = (char*)"./process.out";
+            char *processExec = (char *)"./process.out";
 
             sprintf(remTime, "%d", pcb->executionTime);
             sprintf(inputPID, "%d", pcb->inputPID);
@@ -566,13 +569,12 @@ void scheduler_SJF()
     ProcessControlBlock *currentPCB = (NULL);
     ProcessControlBlock *newPCB = (ProcessControlBlock *)malloc(sizeof(ProcessControlBlock));
     int currClk = -1;
-
+    int current_process_count = 0;
     for (;;)
     {
 
         currClk = getClk();
         DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, currClk);
-
         /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
         while (receiveMessage(&newPCB) != -1)
         {
@@ -580,7 +582,7 @@ void scheduler_SJF()
             /* Enqueue new process, priority = execution time*/
             enqueuePriority(SJF_Queue, newPCB, (newPCB->executionTime));
             saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
-
+            current_process_count++;
             newPCB->state = ProcessState_Ready;
             /* Queue was empty, */
             if (currentPCB == NULL)
@@ -596,10 +598,15 @@ void scheduler_SJF()
         }
 
         if (currentPCB == NULL)
+        {
+            if (process_count == current_process_count)
+            {
+                return;
+            }
             idle_cycles++;
+        }
         else
         {
-
             if (currentPCB->remainingTime == 0)
             {
                 /* Save process state and dequeue it*/
@@ -623,8 +630,9 @@ void scheduler_SJF()
                     output_processStartedStr(currClk, currentPCB);
                 }
             }
-            /* Decrement current process time */
-            currentPCB->remainingTime--;
+            if (currentPCB)
+                /* Decrement current process time */
+                currentPCB->remainingTime--;
         }
         total_cycles++;
         while (currClk == getClk())
@@ -801,15 +809,18 @@ void scheduler_MLFL(int quantum)
         prevClk = getClk();
         DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, prevClk);
 
+        // printf("[MLFL] : Enqueued Process \n");
+        // printf("%d\n", newOccupiedLevel);
         /* New process has just arrived, put it at the back of queue*/
         while (receiveMessage(&newPCB) != -1)
         {
             current_process_count++;
             enqueueMultiLevel(MLVL_Queue, (void **)&newPCB, newPCB->priority);
-            printf("[MLFL] : Enqueued Process \n");
             newOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
-            printf("%d\n", newOccupiedLevel);
-            saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
+            // printf("[MLFL] : Enqueued Process \n");
+            // printf("%d\n", newOccupiedLevel);
+            saveProcessState(newPCB,
+                             newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
             /* Queue was empty, */
             if (currentOccupiedLevel == -1)
             {
@@ -817,7 +828,8 @@ void scheduler_MLFL(int quantum)
                 // save the first occupied level to start with in the next quantam
                 currentOccupiedLevel = newOccupiedLevel;
                 currentPCB->startTime = prevClk;
-                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                saveProcessState(currentPCB,
+                                 currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                 output_processStartedStr(prevClk, currentPCB);
             }
         }
@@ -847,11 +859,11 @@ void scheduler_MLFL(int quantum)
                     output_processFinishedStr(prevClk, currentPCB);
 
                     /* Remove the process from the MLVL permenantly */
-                    dequeueMultiLevel(MLVL_Queue, (void **)&currentPCB, currentPCB->priority);
+                    dequeueMultiLevel(MLVL_Queue, (void **)&currentPCB, i);
 
                     enqueue(finishedProcesses, currentPCB);
 
-                    currentOccupiedLevel = newOccupiedLevel;
+                    currentOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
 
                     if (currentOccupiedLevel == -1)
                     {
@@ -861,7 +873,7 @@ void scheduler_MLFL(int quantum)
                     else
                     {
                         // if I still have processes in that level and no other levels are higher than me , continue fetching in that level
-                        if (!isEmpty(MLVL_Queue->Qptrs[i]) && currentOccupiedLevel >= i)
+                        if (currentOccupiedLevel >= i && !isEmpty(MLVL_Queue->Qptrs[i]))
                         {
                             /* Get next process and run it */
                             peek(MLVL_Queue->Qptrs[i], (void **)&currentPCB);
@@ -873,6 +885,9 @@ void scheduler_MLFL(int quantum)
                             }
                             else
                                 output_processResumedStr(prevClk, currentPCB);
+
+                            saveProcessState(currentPCB,
+                                             currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                         }
                         // there's a level with high priority arrived
                         else
@@ -880,9 +895,12 @@ void scheduler_MLFL(int quantum)
                             // this means a new process entered while am working down here , assume ready and run it
                             peek(MLVL_Queue->Qptrs[currentOccupiedLevel], (void **)&currentPCB);
                             currentPCB->startTime = prevClk;
+                            output_processStartedStr(prevClk, currentPCB);
+                            saveProcessState(currentPCB,
+                                             currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                         }
 
-                        saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                        // saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                     }
                 }
 
@@ -892,7 +910,7 @@ void scheduler_MLFL(int quantum)
                     /* Save the process */
                     saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Blocked, 0);
                     output_processStoppedStr(prevClk, currentPCB);
-                    dequeueMultiLevel(MLVL_Queue, (void **)currentPCB, i);
+                    dequeueMultiLevel(MLVL_Queue, (void **)&currentPCB, i);
                     if (i == 10)
                     {
                         enqueuePriority(reconstructing_buffer, currentPCB, currentPCB->priority);
@@ -902,9 +920,14 @@ void scheduler_MLFL(int quantum)
                         enqueueMultiLevel(MLVL_Queue, (void **)&currentPCB, i + 1);
                     }
                     /* Get the highest level now*/
-                    currentOccupiedLevel = newOccupiedLevel;
+                    currentOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
+                    if (currentOccupiedLevel == -1)
+                    {
+                        currentPCB = NULL;
+                        break;
+                    }
                     // if the current level is still not empty and no higher priority processes have arrived
-                    if (!isEmpty(MLVL_Queue->Qptrs[i]) && i <= currentOccupiedLevel)
+                    if (currentOccupiedLevel >= i && !isEmpty(MLVL_Queue->Qptrs[i]))
                     {
                         // get Next process in the queue and run it
 
@@ -922,17 +945,21 @@ void scheduler_MLFL(int quantum)
 
                         saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                     }
-                    else
+                    else if (currentOccupiedLevel != -1)
                     {
                         // Then go to that level and run the higher priority process
                         peek(MLVL_Queue->Qptrs[currentOccupiedLevel], (void **)&currentPCB);
                         currentPCB->startTime = prevClk;
+                        output_processStartedStr(prevClk, currentPCB);
+                        saveProcessState(currentPCB,
+                                         currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                     }
                     /* Reset quantum passed as we will start a new process */
                     quantum_passed = 0;
                 }
                 break;
             }
+
             if (currentPCB)
             {
                 currentPCB->remainingTime--;
@@ -944,13 +971,20 @@ void scheduler_MLFL(int quantum)
                 // منطقة هبد عالي
                 if (!priorityIsEmpty(reconstructing_buffer))
                 {
-                    PrioNode *temp = reconstructing_buffer->front;
-                    while (temp)
+                    // PrioNode *temp = reconstructing_buffer->front;
+                    ProcessControlBlock *firstPCB;
+                    peekPriority(reconstructing_buffer, (void **)&firstPCB);
+                    while (dequeuePriority(reconstructing_buffer, (void **)&currentPCB))
                     {
-                        dequeuePriority(reconstructing_buffer, (void **)&currentPCB);
+                        // dequeuePriority(reconstructing_buffer, (void **)&currentPCB);
                         enqueueMultiLevel(MLVL_Queue, (void **)&currentPCB, currentPCB->priority);
-                        currentOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
+                        // temp = temp->nextNode;
                     }
+                    currentOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
+                    currentPCB = firstPCB;
+                    output_processResumedStr(prevClk, currentPCB);
+                    saveProcessState(currentPCB,
+                                     currentPCB->remainingTime - 1, currentPCB->priority, ProcessState_Running, 0);
                 }
             }
             total_cycles++;
