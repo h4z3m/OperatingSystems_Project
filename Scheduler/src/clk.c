@@ -40,8 +40,8 @@ int main(int argc, char *argv[])
     sleep(5);
     while (1)
     {
-        // usleep(1000 * 100);
-        sleep(1);
+        usleep(1000 * 100);
+        // sleep(1);
         (*shmaddr)++;
     }
 }

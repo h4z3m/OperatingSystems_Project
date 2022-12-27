@@ -1,3 +1,13 @@
+/**
+ * @file process.c
+ * @author yogilany@gmail.com, h4z3m1z@gmail.com, Ahmed Tarek
+ * @brief
+ * @version 1.0
+ * @date 2022-12-27
+ * 
+ * @copyright Copyright (c) 2022
+ * 
+ */
 #include "../include/headers.h"
 #include "../include/types.h"
 

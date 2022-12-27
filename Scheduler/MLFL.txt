@@ -1,0 +1,221 @@
+[PROCGEN] Processes = 10
+[PROCGEN] Message queue ID = 6      
+Wait! The clock not initialized yet!
+Clock Starting...
+[SCHEDULER] Scheduler started...    
+[SCHEDULER] Message queue ID = 6    
+[SCHEDULER] Starting MLFL...        
+[SCHEDULER] Current Time is 0       
+Current Time is 0
+[SCHEDULER] Current Time is 1
+[PROCGEN] Current Time is 1  
+[PROCGEN] Current Time is 2      
+[SCHEDULER] Current Time is 2    
+[PROCGEN] Process[1] arrived at 3
+[PROCGEN] Current Time is 3      
+[SCHEDULER] Current Time is 3    
+[PROCGEN] Process[2] arrived at 4
+[PROCESS 1] Created, remaining time =3
+[PROCESS 1] Downed, remaining time =3
+At time 3       process 1       started arr     3       total   3       remain  3       wait    0
+[PROCESS 2] Created, remaining time =5
+[PROCGEN] Current Time is 4
+[PROCESS 1] Downed, remaining time =2
+[SCHEDULER] Current Time is 4        
+[PROCGEN] Process[3] arrived at 5    
+[PROCGEN] Current Time is 5
+[SCHEDULER] Current Time is 5        
+[PROCESS 1] Downed, remaining time =1
+[PROCGEN] Process[4] arrived at 6    
+[PROCGEN] Process[5] arrived at 6    
+[PROCESS 3] Created, remaining time =6
+[PROCESS 4] Created, remaining time =7
+[PROCESS 5] Created, remaining time =1
+[PROCGEN] Current Time is 6
+[SCHEDULER] Current Time is 6
+[PROCESS 1] Terminating...
+At time 6       process 1       finished arr    3       total   3       remain  0       wait    0       TA      3 WTA
+ 1.00
+At time 6       process 4       started arr     6       total   7       remain  7       wait    0
+[PROCESS 4] Downed, remaining time =7
+[PROCGEN] Current Time is 7
+[SCHEDULER] Current Time is 7
+[PROCESS 4] Downed, remaining time =6
+[PROCGEN] Current Time is 8
+[SCHEDULER] Current Time is 8
+[PROCESS 4] Downed, remaining time =5
+[PROCGEN] Process[6] arrived at 9
+[PROCESS 4] Downed, remaining time =4
+[SCHEDULER] Current Time is 9
+[PROCGEN] Current Time is 9
+[PROCESS 6] Created, remaining time =8
+[PROCGEN] Current Time is 10
+[PROCESS 4] Downed, remaining time =3
+[SCHEDULER] Current Time is 10
+At time 10      process 4       stopped arr     6       total   7       remain  3       wait    0
+At time 10      process 6       started arr     9       total   8       remain  8       wait    1
+[PROCESS 6] Downed, remaining time =8
+[SCHEDULER] Current Time is 11
+[PROCGEN] Current Time is 11
+[PROCESS 6] Downed, remaining time =7
+[PROCESS 6] Downed, remaining time =6
+[SCHEDULER] Current Time is 12
+[PROCGEN] Current Time is 12
+[PROCGEN] Process[7] arrived at 13
+[SCHEDULER] Current Time is 13
+[PROCGEN] Current Time is 13
+[PROCESS 6] Downed, remaining time =5
+[PROCESS 7] Created, remaining time =9
+[SCHEDULER] Current Time is 14
+[PROCESS 6] Downed, remaining time =4
+[PROCGEN] Current Time is 14
+At time 14      process 6       stopped arr     9       total   8       remain  4       wait    0
+At time 14      process 5       started arr     6       total   1       remain  1       wait    8
+[PROCESS 5] Downed, remaining time =1
+[PROCGEN] Current Time is 15
+[SCHEDULER] Current Time is 15
+[PROCESS 5] Terminating...
+At time 15      process 5       finished arr    6       total   1       remain  0       wait    8       TA      9 WTA  
+ 9.00
+At time 15      process 6       resumed arr     9       total   8       remain  4       wait    2
+[PROCESS 6] Downed, remaining time =3
+[PROCGEN] Current Time is 16
+[SCHEDULER] Current Time is 16
+[PROCESS 6] Downed, remaining time =2
+[PROCGEN] Process[8] arrived at 17
+[PROCGEN] Current Time is 17
+[SCHEDULER] Current Time is 17
+[PROCESS 6] Downed, remaining time =1
+[PROCESS 8] Created, remaining time =2
+[PROCGEN] Current Time is 18
+[SCHEDULER] Current Time is 18
+[PROCESS 6] Terminating...
+[PROCGEN] Process[9] arrived at 19
+[PROCGEN] Process[10] arrived at 19
+[SCHEDULER] Current Time is 19
+[PROCESS 9] Created, remaining time =5
+[PROCESS 10] Created, remaining time =5
+At time 19      process 6       finished arr    9       total   8       remain  0       wait    2       TA      10 WTA 
+1.25
+At time 19      process 10      started arr     19      total   5       remain  5       wait    0
+[PROCESS 10] Downed, remaining time =5
+[SCHEDULER] Current Time is 20
+[PROCESS 10] Downed, remaining time =4
+[SCHEDULER] Current Time is 21
+[PROCESS 10] Downed, remaining time =3
+[PROCESS 10] Downed, remaining time =2
+[SCHEDULER] Current Time is 22
+[PROCESS 10] Downed, remaining time =1
+[SCHEDULER] Current Time is 23
+At time 23      process 10      stopped arr     19      total   5       remain  1       wait    0
+At time 23      process 3       started arr     5       total   6       remain  6       wait    18
+[PROCESS 3] Downed, remaining time =6
+[PROCESS 3] Downed, remaining time =5
+[SCHEDULER] Current Time is 24
+[PROCESS 10] Terminating...
+[SCHEDULER] Current Time is 25
+[PROCESS 3] Downed, remaining time =4
+[PROCESS 3] Downed, remaining time =3
+[SCHEDULER] Current Time is 26
+[SCHEDULER] Current Time is 27
+[PROCESS 3] Downed, remaining time =2
+At time 27      process 3       stopped arr     5       total   6       remain  2       wait    0
+At time 27      process 4       resumed arr     6       total   7       remain  3       wait    18
+[PROCESS 4] Downed, remaining time =2
+[PROCESS 4] Downed, remaining time =1
+[SCHEDULER] Current Time is 28
+[SCHEDULER] Current Time is 29
+[PROCESS 4] Terminating...
+[SCHEDULER] Current Time is 30
+At time 30      process 4       finished arr    6       total   7       remain  0       wait    17      TA      24 WTA 
+3.43
+At time 30      process 10      resumed arr     19      total   5       remain  1       wait    10
+[SCHEDULER] Current Time is 31
+At time 31      process 10      finished arr    19      total   5       remain  0       wait    7       TA      12 WTA 
+2.40
+At time 31      process 3       started arr     5       total   6       remain  2       wait    26
+[PROCESS 3] Downed, remaining time =1
+[SCHEDULER] Current Time is 32
+[PROCESS 3] Terminating...
+[SCHEDULER] Current Time is 33
+At time 33      process 3       finished arr    5       total   6       remain  0       wait    22      TA      28 WTA 
+4.67
+At time 33      process 9       started arr     19      total   5       remain  5       wait    14
+[PROCESS 9] Downed, remaining time =5
+[PROCESS 9] Downed, remaining time =4
+[SCHEDULER] Current Time is 34
+[PROCESS 9] Downed, remaining time =3
+[SCHEDULER] Current Time is 35
+[SCHEDULER] Current Time is 36
+[PROCESS 9] Downed, remaining time =2
+[SCHEDULER] Current Time is 37
+[PROCESS 9] Downed, remaining time =1
+At time 37      process 9       stopped arr     19      total   5       remain  1       wait    0
+At time 37      process 2       started arr     4       total   5       remain  5       wait    33
+[PROCESS 2] Downed, remaining time =5
+[SCHEDULER] Current Time is 38
+[PROCESS 2] Downed, remaining time =4
+[PROCESS 9] Terminating...
+[SCHEDULER] Current Time is 39
+[PROCESS 2] Downed, remaining time =3
+[SCHEDULER] Current Time is 40
+[PROCESS 2] Downed, remaining time =2
+[SCHEDULER] Current Time is 41
+[PROCESS 2] Downed, remaining time =1
+At time 41      process 2       stopped arr     4       total   5       remain  1       wait    0
+At time 41      process 9       resumed arr     19      total   5       remain  1       wait    21
+[SCHEDULER] Current Time is 42
+[PROCESS 2] Terminating...
+At time 42      process 9       finished arr    19      total   5       remain  0       wait    18      TA      23 WTA 
+4.60
+At time 42      process 2       started arr     4       total   5       remain  1       wait    38
+[SCHEDULER] Current Time is 43
+At time 43      process 2       finished arr    4       total   5       remain  0       wait    34      TA      39 WTA 
+7.80
+At time 43      process 7       started arr     13      total   9       remain  9       wait    30
+[PROCESS 7] Downed, remaining time =9
+[SCHEDULER] Current Time is 44
+[PROCESS 7] Downed, remaining time =8
+[SCHEDULER] Current Time is 45
+[PROCESS 7] Downed, remaining time =7
+[PROCESS 7] Downed, remaining time =6
+[SCHEDULER] Current Time is 46
+[SCHEDULER] Current Time is 47
+[PROCESS 7] Downed, remaining time =5
+At time 47      process 7       stopped arr     13      total   9       remain  5       wait    0
+At time 47      process 8       started arr     17      total   2       remain  2       wait    30
+[PROCESS 8] Downed, remaining time =2
+[PROCESS 8] Downed, remaining time =1
+[SCHEDULER] Current Time is 48
+[SCHEDULER] Current Time is 49
+[PROCESS 8] Terminating...
+At time 49      process 8       finished arr    17      total   2       remain  0       wait    30      TA      32 WTA 
+16.00
+At time 49      process 7       resumed arr     13      total   9       remain  5       wait    31
+[PROCESS 7] Downed, remaining time =4
+[SCHEDULER] Current Time is 50
+[PROCESS 7] Downed, remaining time =3
+[SCHEDULER] Current Time is 51
+[PROCESS 7] Downed, remaining time =2
+[SCHEDULER] Current Time is 52
+[PROCESS 7] Downed, remaining time =1
+[SCHEDULER] Current Time is 53
+[PROCESS 7] Terminating...
+At time 53      process 7       stopped arr     13      total   9       remain  1       wait    0
+At time 53      process 7       resumed arr     13      total   9       remain  1       wait    39
+[SCHEDULER] Current Time is 54
+At time 54      process 7       finished arr    13      total   9       remain  0       wait    32      TA      41 WTA 
+4.56
+[SCHEDULER] Current Time is 55
+[SCHEDULER] Stopping MLFL...
+[SCHEDULER] Terminated normally...
+[SCHEDULER] Logging output...
+
+CPU utilization = 94.23%
+Avg WTA = 5.47
+Avg Waiting = 17.0
+[SCHEDULER] Freeing resources...
+Clock Terminating!...
+[SCHEDULER] Freeing resources...[PROCGEN] Terminating...
+
+[SCHEDULER] Freeing resources...

@@ -1,3 +1,13 @@
+/**
+ * @file data_structures.h
+ * @author yogilany@gmail.com, h4z3m1z@gmail.com, Ahmed Tarek
+ * @brief
+ * @version 1.0
+ * @date 2022-12-27
+ *
+ * @copyright Copyright (c) 2022
+ *
+ */
 #ifndef DATA_STRUCTURES_H
 #define DATA_STRUCTURES_H
 
@@ -44,7 +54,6 @@ typedef struct
     Queue *Qptrs[11];
 } MultiLevelQueue;
 
-
 /* Queue */
 Queue *createQueue();
 
@@ -78,10 +87,10 @@ void destroyCircularQueue(CircularQueue *q);
 /* Multi level Queue*/
 MultiLevelQueue *createMultiLevelQueue();
 
-//enqueue item in certain level
+// enqueue item in certain level
 void enqueueMultiLevel(MultiLevelQueue *q, void **dataPtr, int priority_level);
-//dequeue item in chosen level 
-bool dequeueMultiLevel(MultiLevelQueue *q, void **out_data,  int priority_level);
+// dequeue item in chosen level
+bool dequeueMultiLevel(MultiLevelQueue *q, void **out_data, int priority_level);
 // this function returns the first occupied level in the queue , otherwise ; it returns -1
 int multiLevelisEmpty(MultiLevelQueue *q);
 // destroys multilevel by destroying each queue

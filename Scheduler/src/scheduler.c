@@ -1,3 +1,14 @@
+/**
+ * @file scheduler.c
+ * @author yogilany@gmail.com, h4z3m1z@gmail.com, Ahmed Tarek
+ * @brief
+ * @version 1.0
+ * @date 2022-12-27
+ * 
+ * @copyright Copyright (c) 2022
+ * 
+ */
+
 #include "../include/data_structures.h"
 #include "../include/headers.h"
 #include "../include/types.h"
@@ -94,12 +105,16 @@ void deInitProcSem(int *proc_sem_id)
 void freeAllResources()
 {
     static bool freed_flag = false;
+    /* To check if this function was entered more than once */
     if (freed_flag)
         return;
     freed_flag = true;
+
     /* Free queues */
     destroyQueue(finishedProcesses);
     destroyQueue(outputQueue);
+
+    /* Delete the queue associated with algorithm*/
     switch (schedAlgorithm)
     {
     case SchedulingAlgorithm_HPF:
@@ -115,7 +130,7 @@ void freeAllResources()
         destroyMultiLevelQueue(MLVL_Queue);
         break;
     }
-    // TODO free IPC
+    /* Free process semaphores & process structs */
     ProcessControlBlock *pcb;
     Node *ptr = finishedProcesses->front;
     while (ptr)
@@ -235,6 +250,8 @@ void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority,
         - Up its semaphore so it finishes on its own
 
     */
+
+    /* To control sem*/
     union Semun semun;
 
     switch (state)
@@ -277,7 +294,7 @@ void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority,
 }
 
 /**
- * @brief   Prints the process information
+ * @brief   [Debug function] Prints the process information
  *
  * @param pcb   Pointer to process control block
  */
@@ -596,7 +613,7 @@ void scheduler_SJF()
                 output_processStartedStr(currClk, currentPCB);
             }
         }
-
+        /* No process is currently running */
         if (currentPCB == NULL)
         {
             if (process_count == current_process_count)
@@ -681,7 +698,7 @@ void scheduler_RR(int quantum)
                 output_processStartedStr(prevClk, currentPCB);
             }
         }
-
+        /* No process currently running */
         if (!currentPCB)
         {
             if (process_count == current_process_count)

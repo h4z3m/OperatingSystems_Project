@@ -1,3 +1,13 @@
+/**
+ * @file process_generator.c
+ * @author yogilany@gmail.com, h4z3m1z@gmail.com, Ahmed Tarek
+ * @brief
+ * @version 1.0
+ * @date 2022-12-27
+ *
+ * @copyright Copyright (c) 2022
+ *
+ */
 #include "../include/headers.h"
 #include "types.h"
 #include <string.h>
@@ -240,7 +250,7 @@ int main(int argc, char *argv[])
     /* Attach signal handler to SIGINT*/
     signal(SIGINT, clearResources);
 
-    int RR_quantum;
+    int RR_quantum = 4;
     /* Get input filename from input arguments*/
     char *process_filename = argv[1];
     if (argc == 6)
@@ -353,11 +363,12 @@ CLEAR_RESOURCES:
  */
 void clearResources(int signum)
 {
-    // TODO Clears all resources in case of interruption
     DEBUG_PRINTF("[PROCGEN] Terminating...\n");
 
+    /* Signal all child process to terminate if not terminated*/
     destroyClk(true);
 
+    /* Remove message queue*/
     msgctl(proc_msgq, IPC_RMID, (struct msqid_ds *)0);
     exit(0);
 }
