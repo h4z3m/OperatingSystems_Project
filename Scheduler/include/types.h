@@ -1,6 +1,6 @@
 /**
  * @file types.h
- * @author yogilany@gmail.com, h4z3m1z@gmail.com, Ahmed Tarek
+ * @author yogilany@gmail.com, h4z3m1z@gmail.com, ahmedtarek1754@gmail.com
  * @brief
  * @version 1.0
  * @date 2022-12-27

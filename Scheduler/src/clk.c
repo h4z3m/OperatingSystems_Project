@@ -6,7 +6,7 @@
  */
 
 #include "../include/headers.h"
-#include "time.h"
+// #include "time.h"
 int shmid;
 
 /* Clear the resources before exit */
@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
 {
     printf("Clock Starting...\n");
     signal(SIGINT, cleanup);
-    int clk = 0;
+    int clk = -1;
     // Create shared memory for one integer variable 4 bytes
     shmid = shmget(SHKEY, 4, IPC_CREAT | 0644);
     if ((long)shmid == -1)
@@ -37,11 +37,11 @@ int main(int argc, char *argv[])
         exit(-1);
     }
     *shmaddr = clk; /* Initialize shared memory */
-    sleep(5);
+    sleep(10);
     while (1)
     {
-        usleep(1000 * 100);
-        // sleep(1);
+        // usleep(1000 * 100);
+        sleep(2);
         (*shmaddr)++;
     }
 }

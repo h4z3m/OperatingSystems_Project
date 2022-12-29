@@ -1,6 +1,6 @@
 /**
  * @file scheduler.c
- * @author yogilany@gmail.com, h4z3m1z@gmail.com, Ahmed Tarek
+ * @author yogilany@gmail.com, h4z3m1z@gmail.com, ahmedtarek1754@gmail.com
  * @brief
  * @version 1.0
  * @date 2022-12-27
@@ -585,7 +585,7 @@ void scheduler_SJF()
     SJF_Queue = createPriorityQueue();
     ProcessControlBlock *currentPCB = (NULL);
     ProcessControlBlock *newPCB = (ProcessControlBlock *)malloc(sizeof(ProcessControlBlock));
-    int currClk = -1;
+    int currClk = 0;
     int current_process_count = 0;
     for (;;)
     {

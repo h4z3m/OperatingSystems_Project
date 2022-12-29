@@ -1,6 +1,6 @@
 /**
  * @file process_generator.c
- * @author yogilany@gmail.com, h4z3m1z@gmail.com, Ahmed Tarek
+ * @author yogilany@gmail.com, h4z3m1z@gmail.com, ahmedtarek1754@gmail.com
  * @brief
  * @version 1.0
  * @date 2022-12-27
@@ -324,10 +324,10 @@ int main(int argc, char *argv[])
             for (int i = 0; i < process_count; i++)
             {
                 /* Send a process at its arrival time */
-                if (process_array[i]->arrivalTime == prevClk + 1)
+                if (process_array[i]->arrivalTime == prevClk)
                 {
                     /* Send to sched */
-                    DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, prevClk + 1);
+                    DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, prevClk);
                     sendMessage(process_array[i], 1);
                     processes_sent++;
                 }

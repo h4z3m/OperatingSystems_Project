@@ -2,6 +2,6 @@
 
 ## Team Members
 
-1. Ahmed Tarek
+1. ahmedtarek1754@gmail.com
 2. Hazem Montasser
 3. Youssef Gilany
