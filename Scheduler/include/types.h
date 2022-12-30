@@ -19,6 +19,16 @@ typedef enum
     ProcessState_Finished
 } ProcessState;
 
+typedef struct node
+{
+    int data;            /**< the size of the node */
+    int startIndx;       /**< the start of the memory piece */
+    int endIndx;         /**< the end of the memory piece */
+    struct node *left;   /**< a node representing the left subtree */
+    struct node *parent; /**< a node to the parent; equal NULL if there's no parent */
+    struct node *right;  /**< a node representing the right subtree */
+} node;
+
 typedef struct
 {
     /*** Unchanged during execution ***/
@@ -36,6 +46,7 @@ typedef struct
     int remainingTime;  /* Remaining time for the process to finish*/
     int priority;       /* 0 : Highest, 10: Lowest*/
     ProcessState state; /* Current process state*/
+    node *memoryNode;
 
 } ProcessControlBlock;
 
