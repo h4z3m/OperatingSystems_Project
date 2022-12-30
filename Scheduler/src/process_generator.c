@@ -30,6 +30,8 @@ ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime, 
     newProcess->memSize = memSize;
     newProcess->priority = priority;
     newProcess->state = ProcessState_Ready;
+    newProcess->memoryNode = NULL;
+
     return newProcess;
 }
 
