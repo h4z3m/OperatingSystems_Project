@@ -30,6 +30,8 @@
 typedef short bool;
 #define true 1
 #define false 0
+node *treeRoot = NULL;
+#define MEM_MAX_SIZE 1024
 
 #define SHKEY 300
 #define MSGQKEY 400
@@ -136,6 +138,199 @@ void destroyClk(bool terminateAll)
     {
         killpg(getpgrp(), SIGINT);
     }
+}
+
+unsigned int nextPowerOf2(unsigned int n)
+{
+    n--;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    n++;
+    return n;
+}
+
+/**
+ * @brief Create a node give it's data
+ *
+ * @param data the size of the memory the node represents.
+ * @param parent a pointer to the parent.
+ * @param start the start of the memory the node represents.
+ * @return node* the created node
+ */
+node *newNode(int data, node *parent, int start)
+{
+    node *node1 = (node *)malloc(sizeof(node));
+    node1->data = data;
+    node1->left = NULL;
+    node1->right = NULL;
+    node1->parent = parent;
+    node1->startIndx = start;
+    node1->endIndx = start + data - 1;
+    return (node1);
+}
+
+node *alloc1(int size, int currentSize, node *grandParent, char dir, int start)
+{
+    node *parent;
+
+    parent = newNode(currentSize, grandParent, start);
+
+    if (grandParent != NULL)
+    {
+        if (dir == 'l')
+            grandParent->left = parent;
+        else
+            grandParent->right = parent;
+    }
+
+    node *t1 = NULL;
+    while (currentSize > size)
+    {
+        t1 = newNode(currentSize / 2, parent, start);
+
+        parent->left = t1;
+        parent = t1;
+
+        currentSize /= 2;
+    }
+
+    if (t1 == NULL)
+        return parent;
+    return t1;
+}
+
+node *alloc2(node *root, int size)
+{
+    if (root == NULL)
+        return NULL;
+
+    // allocated place -> return NULL
+    if (root->left == NULL && root->right == NULL)
+        return NULL;
+
+    // if the this node has a size that equals to the double of the desired size
+    if (root->data == 2 * size)
+    {
+        // If the left is free -> Allocate
+        if (root->left == NULL)
+        {
+            node *t1 = newNode(size, root, root->startIndx);
+
+            root->left = t1;
+
+            return t1;
+        }
+        // If the right is free -> Allocate
+        else if (root->right == NULL)
+        {
+            node *t1 = newNode(size, root, root->startIndx + root->data / 2);
+
+            root->right = t1;
+
+            return t1;
+        }
+        else
+            return NULL;
+    }
+    // if the this node has a size that is bigger than the double of the desired size
+    else if (root->data > 2 * size)
+    {
+
+        if (root->left != NULL && root->right != NULL)
+        {
+            node *left = alloc2(root->left, size);
+            if (left == NULL)
+            {
+                node *right = alloc2(root->right, size);
+                return right;
+            }
+            else
+                return left;
+        }
+        // If the tree has left subtree -> If it finds a place, then the desired memory is allocated. Otherwise it call alloc1 for allocation.
+        else if (root->left != NULL)
+        {
+            node *left = alloc2(root->left, size);
+            if (left == NULL)
+            {
+                node *t1 = alloc1(size, root->data / 2, root, 'r', root->startIndx + root->data / 2);
+
+                return t1;
+            }
+            else
+                return left;
+        }
+        // If the tree has right subtree -> solve(right subtree). If it finds a place,
+        //  then the desired memory is allocated. Otherwise it call alloc1 for allocation.
+        else
+        {
+            node *right = alloc2(root->right, size);
+            if (right == NULL)
+            {
+                node *t1 = alloc1(size, root->data / 2, root, 'l', root->startIndx);
+
+                return t1;
+            }
+            else
+                return right;
+        }
+    }
+    else
+        return NULL;
+}
+
+/**
+ * @brief This function used to allocate a piece of memory in the buddy system
+ * memory management
+ *
+ * @param size The desired memory size to allocate
+ * @return node* a node pointer to the allocated piece of memory
+ */
+node *Allocate(int size)
+{
+    int blockSize = nextPowerOf2(size);
+
+    if (treeRoot == NULL)
+    {
+        treeRoot = newNode(MEM_MAX_SIZE, NULL, 0);
+        if (MEM_MAX_SIZE > blockSize)
+            return alloc1(blockSize, MEM_MAX_SIZE / 2, treeRoot, 'l', 0);
+        else
+            return treeRoot;
+    }
+    else
+        return alloc2(treeRoot, blockSize);
+}
+
+int DeallocateUtil(node *root)
+{
+    if (root == NULL)
+        return 0;
+
+    if (root->left == NULL && root->right == NULL)
+    {
+        node *parent = root->parent;
+        if (parent != NULL)
+        {
+            if (parent->right == root)
+                parent->right = NULL;
+            else
+                parent->left = NULL;
+        }
+        free(root);
+        return DeallocateUtil(parent);
+    }
+
+    return 1;
+}
+
+void Deallocate(node *root)
+{
+    if (DeallocateUtil(root) == 0)
+        treeRoot = NULL;
 }
 
 #endif // HEADERS_H
