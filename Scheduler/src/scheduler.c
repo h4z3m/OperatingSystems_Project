@@ -437,6 +437,25 @@ void generateSchedulerLog(Queue *lines)
 }
 
 /**
+ * @brief   Generates the memory log using the lines queue. Writes to "memory.log" file
+ *
+ * @param lines Queue which includes lines to output
+ */
+void generateMemoryLog(Queue *lines)
+{
+    FILE *logfile = fopen("memory.log", "w");
+    char *line = NULL;
+    fputs("#At time x allocated y bytes for process z from i to j\n", logfile);
+    while (dequeue(lines, (void **)&line))
+    {
+        fputs(line, logfile);
+        /* Free dynamically allocated line*/
+        free(line);
+    }
+    fclose(logfile);
+}
+
+/**
  * @brief   Generates the scheduler performance log. It includes average WTA, average waiting time, & CPU utilization %.
  *
  * @param processInfoQueue  Queue which contains all processes' PCBs
