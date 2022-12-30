@@ -20,14 +20,14 @@ void clearResources(int);
  * @brief Creates a new process with given data, and returns a pointer to it.
  *
  */
-ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime /*,int memSize*/, int priority)
+ProcessControlBlock *createProcess(int pid, int arrivalTime, int executionTime, int priority, int memSize)
 {
     ProcessControlBlock *newProcess = (ProcessControlBlock *)calloc(
         1, sizeof(ProcessControlBlock));
     newProcess->inputPID = pid;
     newProcess->arrivalTime = arrivalTime;
     newProcess->executionTime = newProcess->remainingTime = executionTime;
-    // newProcess->memSize = memSize;
+    newProcess->memSize = memSize;
     newProcess->priority = priority;
     newProcess->state = ProcessState_Ready;
     return newProcess;
@@ -69,7 +69,7 @@ int readInputFile(char *fileName, ProcessControlBlock ***processInfoArray)
     int i = -1;
 
     int id = 0;
-    int arrival, runtime, priority;
+    int arrival, runtime, priority, memSize;
     int processCount = 0;
 
     if (NULL == ptr)
@@ -119,6 +119,9 @@ int readInputFile(char *fileName, ProcessControlBlock ***processInfoArray)
                 case 3:
                     priority = input;
                     break;
+                case 4:
+                    memSize = input;
+                    break;
                 }
                 input = 0;
                 states++;
@@ -127,7 +130,7 @@ int readInputFile(char *fileName, ProcessControlBlock ***processInfoArray)
             {
                 if (i != -1)
                 {
-                    (*processInfoArray)[i] = createProcess(id, arrival, runtime, input);
+                    (*processInfoArray)[i] = createProcess(id, arrival, runtime, priority, input);
                 }
                 isReadingComment = false;
                 states = 0;
@@ -135,7 +138,7 @@ int readInputFile(char *fileName, ProcessControlBlock ***processInfoArray)
                 input = 0;
                 inc = 1;
 
-                id = priority = arrival = runtime = 0;
+                id = priority = arrival = runtime = memSize = 0;
             }
             else
             {
