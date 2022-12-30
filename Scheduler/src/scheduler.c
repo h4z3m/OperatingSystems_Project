@@ -350,6 +350,24 @@ void output_processStartedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF(MAG "%s" RESET, buffer);
 }
 
+void outputMemory_processAllocated(int currTime, ProcessControlBlock *pcb)
+{
+    char *buffer = (char *)malloc(sizeof(char) * 100);
+    snprintf(buffer, 100, "At time %d allocated %d bytes for process %d from %d to %d \n",
+             getClk(), pcb->memoryNode->data, pcb->PID, pcb->memoryNode->startIndx, pcb->memoryNode->endIndx);
+    enqueue(memoryQueue, buffer);
+    DEBUG_PRINTF(MAG "%s" RESET, buffer);
+}
+
+void outputMemory_processDeallocated(int currTime, ProcessControlBlock *pcb)
+{
+    char *buffer = (char *)malloc(sizeof(char) * 100);
+    snprintf(buffer, 100, "At time %d freed %d bytes from process %d from %d to %d \n",
+             getClk(), pcb->memoryNode->data, pcb->PID, pcb->memoryNode->startIndx, pcb->memoryNode->endIndx);
+    enqueue(memoryQueue, buffer);
+    DEBUG_PRINTF(MAG "%s" RESET, buffer);
+}
+
 /**
  * @brief   Outputs the process stopped string and queues it to the output queue
  *
