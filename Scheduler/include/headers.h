@@ -31,7 +31,7 @@ typedef short bool;
 #define true 1
 #define false 0
 node *treeRoot = NULL;
-#define MEM_MAX_SIZE 1024
+#define MemorySize 1024
 
 #define SHKEY 300
 #define MSGQKEY 400
@@ -172,11 +172,9 @@ node *newNode(int data, node *parent, int start)
     return (node1);
 }
 
-node *alloc1(int size, int currentSize, node *grandParent, char dir, int start)
+node *allocateRoot(int size, int currentSize, node *grandParent, char dir, int start)
 {
-    node *parent;
-
-    parent = newNode(currentSize, grandParent, start);
+    node *parent = newNode(currentSize, grandParent, start);
 
     if (grandParent != NULL)
     {
@@ -186,28 +184,28 @@ node *alloc1(int size, int currentSize, node *grandParent, char dir, int start)
             grandParent->right = parent;
     }
 
-    node *t1 = NULL;
+    node *child = NULL;
     while (currentSize > size)
     {
-        t1 = newNode(currentSize / 2, parent, start);
+        child = newNode(currentSize / 2, parent, start);
 
-        parent->left = t1;
-        parent = t1;
+        parent->left = child;
+        parent = child;
 
-        currentSize /= 2;
+        currentSize = currentSize / 2;
     }
 
-    if (t1 == NULL)
+    if (child == NULL)
         return parent;
-    return t1;
+    return child;
 }
 
-node *alloc2(node *root, int size)
+node *allocateTree(node *root, int size)
 {
     if (root == NULL)
         return NULL;
 
-    // allocated place -> return NULL
+    // allocated node
     if (root->left == NULL && root->right == NULL)
         return NULL;
 
@@ -217,20 +215,20 @@ node *alloc2(node *root, int size)
         // If the left is free -> Allocate
         if (root->left == NULL)
         {
-            node *t1 = newNode(size, root, root->startIndx);
+            node *child = newNode(size, root, root->startIndx);
 
-            root->left = t1;
+            root->left = child;
 
-            return t1;
+            return child;
         }
         // If the right is free -> Allocate
         else if (root->right == NULL)
         {
-            node *t1 = newNode(size, root, root->startIndx + root->data / 2);
+            node *child = newNode(size, root, root->startIndx + root->data / 2);
 
-            root->right = t1;
+            root->right = child;
 
-            return t1;
+            return child;
         }
         else
             return NULL;
@@ -241,10 +239,10 @@ node *alloc2(node *root, int size)
 
         if (root->left != NULL && root->right != NULL)
         {
-            node *left = alloc2(root->left, size);
+            node *left = allocateTree(root->left, size);
             if (left == NULL)
             {
-                node *right = alloc2(root->right, size);
+                node *right = allocateTree(root->right, size);
                 return right;
             }
             else
@@ -253,12 +251,12 @@ node *alloc2(node *root, int size)
         // If the tree has left subtree -> If it finds a place, then the desired memory is allocated. Otherwise it call alloc1 for allocation.
         else if (root->left != NULL)
         {
-            node *left = alloc2(root->left, size);
+            node *left = allocateTree(root->left, size);
             if (left == NULL)
             {
-                node *t1 = alloc1(size, root->data / 2, root, 'r', root->startIndx + root->data / 2);
+                node *child = allocateRoot(size, root->data / 2, root, 'r', root->startIndx + root->data / 2);
 
-                return t1;
+                return child;
             }
             else
                 return left;
@@ -267,12 +265,12 @@ node *alloc2(node *root, int size)
         //  then the desired memory is allocated. Otherwise it call alloc1 for allocation.
         else
         {
-            node *right = alloc2(root->right, size);
+            node *right = allocateTree(root->right, size);
             if (right == NULL)
             {
-                node *t1 = alloc1(size, root->data / 2, root, 'l', root->startIndx);
+                node *child = allocateRoot(size, root->data / 2, root, 'l', root->startIndx);
 
-                return t1;
+                return child;
             }
             else
                 return right;
@@ -295,17 +293,17 @@ node *Allocate(int size)
 
     if (treeRoot == NULL)
     {
-        treeRoot = newNode(MEM_MAX_SIZE, NULL, 0);
-        if (MEM_MAX_SIZE > blockSize)
-            return alloc1(blockSize, MEM_MAX_SIZE / 2, treeRoot, 'l', 0);
+        treeRoot = newNode(MemorySize, NULL, 0);
+        if (MemorySize > blockSize)
+            return allocateRoot(blockSize, MemorySize / 2, treeRoot, 'l', 0);
         else
             return treeRoot;
     }
     else
-        return alloc2(treeRoot, blockSize);
+        return allocateTree(treeRoot, blockSize);
 }
 
-int DeallocateUtil(node *root)
+int Deallocate_(node *root)
 {
     if (root == NULL)
         return 0;
@@ -321,7 +319,7 @@ int DeallocateUtil(node *root)
                 parent->left = NULL;
         }
         free(root);
-        return DeallocateUtil(parent);
+        return Deallocate_(parent);
     }
 
     return 1;
@@ -329,7 +327,7 @@ int DeallocateUtil(node *root)
 
 void Deallocate(node *root)
 {
-    if (DeallocateUtil(root) == 0)
+    if (Deallocate_(root) == 0)
         treeRoot = NULL;
 }
 
