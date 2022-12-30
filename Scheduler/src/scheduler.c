@@ -4,9 +4,9 @@
  * @brief
  * @version 1.0
  * @date 2022-12-27
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 
 #include "../include/data_structures.h"
@@ -35,6 +35,8 @@ static int proc_msgq = 0;
 
 /* Queue for output messages in scheduler.log */
 static Queue *outputQueue = NULL;
+/* Queue for memory messages in memory.log */
+static Queue *memoryQueue = NULL;
 
 /* Queue for finished processes, used in logging */
 static Queue *finishedProcesses = NULL;
@@ -516,33 +518,23 @@ void scheduler_HPF()
         /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
         while (receiveMessage(&newPCB) != -1)
         {
+            // Allocating memory for the process
+            newPCB->memoryNode = Allocate(newPCB->memSize);
 
-            /* Enqueue new process, priority = execution time*/
-            enqueuePriority(HPF_Queue, newPCB, (newPCB->priority));
-            saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
-            current_process_count++;
-            newPCB->state = ProcessState_Ready;
-            /* Queue was empty, */
-            if (currentPCB == NULL)
+            if (newPCB->memoryNode != NULL)
             {
-                currentPCB = newPCB;
-                currentPCB->startTime = currClk;
-                saveProcessState(currentPCB,
-                                 currentPCB->remainingTime,
-                                 currentPCB->priority,
-                                 ProcessState_Running, 0);
-                output_processStartedStr(currClk, currentPCB);
-            }
-            else
-            {
-                // if I was less priority than the running process then save the status of the current and replace it
-                if (newPCB->priority < currentPCB->priority)
+
+                /* Enqueue new process, priority = execution time*/
+                enqueuePriority(HPF_Queue, newPCB, (newPCB->priority));
+
+                outputMemory_processAllocated(getClk(), newPCB);
+
+                saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
+                current_process_count++;
+                newPCB->state = ProcessState_Ready;
+                /* Queue was empty, */
+                if (currentPCB == NULL)
                 {
-                    saveProcessState(currentPCB,
-                                     currentPCB->remainingTime,
-                                     currentPCB->priority,
-                                     ProcessState_Blocked, 0);
-                    output_processStoppedStr(currClk, currentPCB);
                     currentPCB = newPCB;
                     currentPCB->startTime = currClk;
                     saveProcessState(currentPCB,
@@ -550,6 +542,25 @@ void scheduler_HPF()
                                      currentPCB->priority,
                                      ProcessState_Running, 0);
                     output_processStartedStr(currClk, currentPCB);
+                }
+                else
+                {
+                    // if I was less priority than the running process then save the status of the current and replace it
+                    if (newPCB->priority < currentPCB->priority)
+                    {
+                        saveProcessState(currentPCB,
+                                         currentPCB->remainingTime,
+                                         currentPCB->priority,
+                                         ProcessState_Blocked, 0);
+                        output_processStoppedStr(currClk, currentPCB);
+                        currentPCB = newPCB;
+                        currentPCB->startTime = currClk;
+                        saveProcessState(currentPCB,
+                                         currentPCB->remainingTime,
+                                         currentPCB->priority,
+                                         ProcessState_Running, 0);
+                        output_processStartedStr(currClk, currentPCB);
+                    }
                 }
             }
         }
@@ -573,6 +584,10 @@ void scheduler_HPF()
                                  currentPCB->priority,
                                  ProcessState_Finished, currClk);
                 output_processFinishedStr(currClk, currentPCB);
+
+                Deallocate(currentPCB->memoryNode);
+                outputMemory_processDeallocated(currClk, currentPCB);
+
                 removeNodePriority(HPF_Queue, (void **)&currentPCB);
                 enqueue(finishedProcesses, currentPCB);
                 currentPCB = NULL;
@@ -1122,6 +1137,8 @@ int main(int argc, char *argv[])
     DEBUG_PRINTF("[SCHEDULER] Logging output...\n");
 
     generateSchedulerLog(outputQueue);
+
+    generateMemoryLog(memoryQueue);
 
     generateSchedulerPerf(finishedProcesses);
 
