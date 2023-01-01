@@ -27,6 +27,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "types.h"
+
 typedef short bool;
 #define true 1
 #define false 0
