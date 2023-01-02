@@ -10,7 +10,8 @@
  */
 #ifndef TYPES_H
 #define TYPES_H
-
+typedef struct treeNode treeNode;
+// #include "data_structures.h"
 typedef enum
 {
     ProcessState_Ready,
@@ -18,16 +19,6 @@ typedef enum
     ProcessState_Running,
     ProcessState_Finished
 } ProcessState;
-
-typedef struct node
-{
-    int data;            /**< the size of the node */
-    int startIndx;       /**< the start of the memory piece */
-    int endIndx;         /**< the end of the memory piece */
-    struct node *left;   /**< a node representing the left subtree */
-    struct node *parent; /**< a node to the parent; equal NULL if there's no parent */
-    struct node *right;  /**< a node representing the right subtree */
-} node;
 
 typedef struct
 {
@@ -46,7 +37,7 @@ typedef struct
     int remainingTime;  /* Remaining time for the process to finish*/
     int priority;       /* 0 : Highest, 10: Lowest*/
     ProcessState state; /* Current process state*/
-    node *memoryNode;
+     treeNode *memoryNode;
 
 } ProcessControlBlock;
 
@@ -62,7 +53,6 @@ typedef enum
     SchedulingAlgorithm_HPF,     /* Highest Priority First*/
     SchedulingAlgorithm_RR,      /* Round Robin*/
     SchedulingAlgorithm_MLFL     /* Multi-Level Feedback Loop*/
-
 } SchedulingAlgorithm_t;
 
 /* arg for semctl system calls. */

@@ -20,6 +20,17 @@ void cleanup(int signum)
 /* This file represents the system clock for ease of calculations */
 int main(int argc, char *argv[])
 {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    initClkSem(&clk_sem_id);
+    union Semun semun = {0};
+    semun.val = 0;
+    if (semctl(clk_sem_id, 0, SETVAL, semun) == -1)
+    {
+        perror("Error in semctl\n");
+        exit(-1);
+    }
+    initClkUsers();
     printf("Clock Starting...\n");
     signal(SIGINT, cleanup);
     int clk = -1;
@@ -37,11 +48,23 @@ int main(int argc, char *argv[])
         exit(-1);
     }
     *shmaddr = clk; /* Initialize shared memory */
-    sleep(10);
+
+    int old_users = getClkUsers();
+    sleep(5);
+
     while (1)
     {
-        // usleep(1000 * 100);
-        sleep(2);
+        usleep(1000 * 100);
+        // sleep(1);
+        // DEBUG_PRINTF("[CLK] Current clk users = %d\n", getClkUsers());
+        // old_users = getClkUsers();
+        // down_value(clk_sem_id, -old_users);
+        // /* If new processes arrive while we were trying to down, wait for them*/
+        // if (old_users < getClkUsers())
+        // {
+        //     down_value(clk_sem_id, -(getClkUsers() - old_users));
+        // }
+        // sleep(1);
         (*shmaddr)++;
     }
 }

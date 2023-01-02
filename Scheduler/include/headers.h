@@ -11,6 +11,7 @@
 #ifndef HEADERS_H
 #define HEADERS_H
 
+#include "types.h"
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
@@ -27,17 +28,16 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include "types.h"
 
 typedef short bool;
 #define true 1
 #define false 0
-node *treeRoot = NULL;
-#define MemorySize 1024
 
 #define SHKEY 300
 #define MSGQKEY 400
 #define SEM_PROC_SCHED_KEY 500
+#define SEM_CLK_KEY 600
+#define SHM_USERS_COUNT 700
 
 #define RED "\x1B[31m"
 #define GRN "\x1B[32m"
@@ -60,8 +60,12 @@ node *treeRoot = NULL;
 
 ///==============================
 // don't mess with this variable//
-int *shmaddr; //
+int *shmaddr;        //
+int *shm_users_addr; //
 //===============================
+
+/* Clock semaphore ID */
+int clk_sem_id = 0;
 
 /**
  * @brief   Semaphore down operation. Decrements the semaphore value by 1
@@ -74,6 +78,26 @@ void down(int sem)
 
     p_op.sem_num = 0;
     p_op.sem_op = -1;
+    p_op.sem_flg = !IPC_NOWAIT;
+
+    if (semop(sem, &p_op, 1) == -1)
+    {
+        perror("Error in down()");
+        exit(-1);
+    }
+}
+
+/**
+ * @brief   Semaphore down operation. Decrements the semaphore value by 1
+ *
+ * @param sem       Semaphore ID
+ */
+void down_value(int sem, int val)
+{
+    struct sembuf p_op;
+
+    p_op.sem_num = 0;
+    p_op.sem_op = val;
     p_op.sem_flg = !IPC_NOWAIT;
 
     if (semop(sem, &p_op, 1) == -1)
@@ -108,6 +132,22 @@ int getClk()
 {
     return *shmaddr;
 }
+
+int getClkUsers()
+{
+    return (*shm_users_addr);
+}
+
+void enterClkUsers()
+{
+    (*shm_users_addr)++;
+}
+
+void exitClkUsers()
+{
+    (*shm_users_addr)--;
+}
+
 /*
  * All processes call this function at the beginning to establish communication between them and the clock module.
  * Again, remember that the clock is only emulation!
@@ -123,6 +163,41 @@ void initClk()
         shmid = shmget(SHKEY, 4, 0444);
     }
     shmaddr = (int *)shmat(shmid, (void *)0, 0);
+}
+
+int initClkUsers()
+{
+    int shmid = shmget(SHM_USERS_COUNT, 4, IPC_CREAT | 0666);
+    if ((long)shmid == -1)
+    {
+        perror("Error in creating shm!");
+        exit(-1);
+    }
+    shm_users_addr = (int *)shmat(shmid, (void *)0, 0);
+    if ((long)shm_users_addr == -1)
+    {
+        perror("Error in attaching the shm in clock!");
+        exit(-1);
+    }
+    return shmid;
+}
+
+void initClkSem(int *semid)
+{
+    int key_id = ftok("./", getpid());
+
+    if (key_id == -1)
+        perror("Error in ftok\n");
+
+    *semid = semget(SEM_CLK_KEY, 1, 0666 | IPC_CREAT);
+
+    if (*semid == -1)
+    {
+        perror("Error in create sem\n");
+        exit(-1);
+    }
+
+    
 }
 
 /*
@@ -142,195 +217,5 @@ void destroyClk(bool terminateAll)
     }
 }
 
-unsigned int nextPowerOf2(unsigned int n)
-{
-    n--;
-    n |= n >> 1;
-    n |= n >> 2;
-    n |= n >> 4;
-    n |= n >> 8;
-    n |= n >> 16;
-    n++;
-    return n;
-}
-
-/**
- * @brief Create a node give it's data
- *
- * @param data the size of the memory the node represents.
- * @param parent a pointer to the parent.
- * @param start the start of the memory the node represents.
- * @return node* the created node
- */
-node *newNode(int data, node *parent, int start)
-{
-    node *node1 = (node *)malloc(sizeof(node));
-    node1->data = data;
-    node1->left = NULL;
-    node1->right = NULL;
-    node1->parent = parent;
-    node1->startIndx = start;
-    node1->endIndx = start + data - 1;
-    return (node1);
-}
-
-node *allocateRoot(int size, int currentSize, node *grandParent, char dir, int start)
-{
-    node *parent = newNode(currentSize, grandParent, start);
-
-    if (grandParent != NULL)
-    {
-        if (dir == 'l')
-            grandParent->left = parent;
-        else
-            grandParent->right = parent;
-    }
-
-    node *child = NULL;
-    while (currentSize > size)
-    {
-        child = newNode(currentSize / 2, parent, start);
-
-        parent->left = child;
-        parent = child;
-
-        currentSize = currentSize / 2;
-    }
-
-    if (child == NULL)
-        return parent;
-    return child;
-}
-
-node *allocateTree(node *root, int size)
-{
-    if (root == NULL)
-        return NULL;
-
-    // allocated node
-    if (root->left == NULL && root->right == NULL)
-        return NULL;
-
-    // if the this node has a size that equals to the double of the desired size
-    if (root->data == 2 * size)
-    {
-        // If the left is free -> Allocate
-        if (root->left == NULL)
-        {
-            node *child = newNode(size, root, root->startIndx);
-
-            root->left = child;
-
-            return child;
-        }
-        // If the right is free -> Allocate
-        else if (root->right == NULL)
-        {
-            node *child = newNode(size, root, root->startIndx + root->data / 2);
-
-            root->right = child;
-
-            return child;
-        }
-        else
-            return NULL;
-    }
-    // if the this node has a size that is bigger than the double of the desired size
-    else if (root->data > 2 * size)
-    {
-
-        if (root->left != NULL && root->right != NULL)
-        {
-            node *left = allocateTree(root->left, size);
-            if (left == NULL)
-            {
-                node *right = allocateTree(root->right, size);
-                return right;
-            }
-            else
-                return left;
-        }
-        // If the tree has left subtree -> If it finds a place, then the desired memory is allocated. Otherwise it call alloc1 for allocation.
-        else if (root->left != NULL)
-        {
-            node *left = allocateTree(root->left, size);
-            if (left == NULL)
-            {
-                node *child = allocateRoot(size, root->data / 2, root, 'r', root->startIndx + root->data / 2);
-
-                return child;
-            }
-            else
-                return left;
-        }
-        // If the tree has right subtree -> solve(right subtree). If it finds a place,
-        //  then the desired memory is allocated. Otherwise it call alloc1 for allocation.
-        else
-        {
-            node *right = allocateTree(root->right, size);
-            if (right == NULL)
-            {
-                node *child = allocateRoot(size, root->data / 2, root, 'l', root->startIndx);
-
-                return child;
-            }
-            else
-                return right;
-        }
-    }
-    else
-        return NULL;
-}
-
-/**
- * @brief This function used to allocate a piece of memory in the buddy system
- * memory management
- *
- * @param size The desired memory size to allocate
- * @return node* a node pointer to the allocated piece of memory
- */
-node *Allocate(int size)
-{
-    int blockSize = nextPowerOf2(size);
-
-    if (treeRoot == NULL)
-    {
-        treeRoot = newNode(MemorySize, NULL, 0);
-        if (MemorySize > blockSize)
-            return allocateRoot(blockSize, MemorySize / 2, treeRoot, 'l', 0);
-        else
-            return treeRoot;
-    }
-    else
-        return allocateTree(treeRoot, blockSize);
-}
-
-int Deallocate_(node *root)
-{
-    if (root == NULL)
-        return 0;
-
-    if (root->left == NULL && root->right == NULL)
-    {
-        node *parent = root->parent;
-        if (parent != NULL)
-        {
-            if (parent->right == root)
-                parent->right = NULL;
-            else
-                parent->left = NULL;
-        }
-        free(root);
-        return Deallocate_(parent);
-    }
-
-    return 1;
-}
-
-void Deallocate(node *root)
-{
-    if (Deallocate_(root) == 0)
-        treeRoot = NULL;
-}
 
 #endif // HEADERS_H

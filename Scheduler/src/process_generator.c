@@ -62,16 +62,6 @@ void destroyProcessArray(ProcessControlBlock **array, int count)
 int readInputFile(char *fileName, ProcessControlBlock ***processInfoArray)
 {
     FILE *ptr = fopen(fileName, "r");
-    char ch;
-    int ch_;
-    bool isReadingComment = false;
-    int states = 0;
-    int inc = 1;
-    int input = 0;
-    int i = -1;
-
-    int id = 0;
-    int arrival, runtime, priority, memSize;
     int processCount = 0;
 
     if (NULL == ptr)
@@ -90,74 +80,26 @@ int readInputFile(char *fileName, ProcessControlBlock ***processInfoArray)
                 ;
     rewind(ptr);
     *processInfoArray = (ProcessControlBlock **)malloc(sizeof(ProcessControlBlock *) * processCount);
-
-    do
+    char *line = (char *)malloc(sizeof(char) * 100);
+    size_t size = 100;
+    int i = 0;
+    while (getline(&line, &size, ptr) != -1)
     {
-        ch = fgetc(ptr);
-        ch_ = ch;
-
-        if (ch == '#')
+        if (line[0] == '#')
+            continue;
+        else
         {
-            isReadingComment = true;
-        }
-
-        if (!isReadingComment)
-        {
-            if (ch_ == 32 || ch_ == 9)
-            {
-                inc = 1;
-
-                switch (states)
-                {
-                case 0:
-                    id = input;
-                    break;
-                case 1:
-                    arrival = input;
-                    break;
-                case 2:
-                    runtime = input;
-                    break;
-                case 3:
-                    priority = input;
-                    break;
-                case 4:
-                    memSize = input;
-                    break;
-                }
-                input = 0;
-                states++;
-            }
-            else if (ch_ == 10)
-            {
-                if (i != -1)
-                {
-                    (*processInfoArray)[i] = createProcess(id, arrival, runtime, priority, input);
-                }
-                isReadingComment = false;
-                states = 0;
-                i++;
-                input = 0;
-                inc = 1;
-
-                id = priority = arrival = runtime = memSize = 0;
-            }
-            else
-            {
-
-                input = input * inc + (ch - 48);
-
-                inc = inc * 10;
-            }
-        }
-
-        if (ch_ == 10 && i == -1)
-        {
-            isReadingComment = false;
+            int inputPID;
+            int arrivalTime;
+            int runTime;
+            int priority;
+            int memSize;
+            sscanf(line, "%d\t%d\t%d\t%d\t%d\n", &inputPID, &arrivalTime, &runTime, &priority, &memSize);
+            ProcessControlBlock *newPCB = createProcess(inputPID, arrivalTime, runTime, priority, memSize);
+            (*processInfoArray)[i] = newPCB;
             i++;
         }
-
-    } while (ch != EOF);
+    }
 
     fclose(ptr);
     return processCount;
@@ -305,9 +247,10 @@ int main(int argc, char *argv[])
         execv(schedargs[0], schedargs);
 
     // 4. Use this function after creating the clock process to initialize clock.
-
+    initClkSem(&clk_sem_id);
+    initClkUsers();
+    enterClkUsers();
     initClk();
-
     // To get time use this function.
     int prevClk = getClk();
 
@@ -317,42 +260,45 @@ int main(int argc, char *argv[])
 
     // 6. Send the information to the scheduler at the appropriate time.
     int processes_sent = 0;
+    int currClk = getClk();
+    // up(clk_sem_id, 1);
 
     for (;;)
     {
-        int currClk = getClk();
-        if (currClk != prevClk)
+        currClk = getClk();
+
+        DEBUG_PRINTF("[PROCGEN] Current Time is %d\n", currClk);
+
+        for (int i = 0; i < process_count; i++)
         {
-            prevClk = getClk();
-            DEBUG_PRINTF("[PROCGEN] Current Time is %d\n", getClk());
-
-            for (int i = 0; i < process_count; i++)
+            /* Send a process at its arrival time */
+            if (process_array[i]->arrivalTime == currClk)
             {
-                /* Send a process at its arrival time */
-                if (process_array[i]->arrivalTime == prevClk)
+                /* Send to sched */
+                DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, currClk);
+                sendMessage(process_array[i], 1);
+                processes_sent++;
+            }
+            /* Generator has sent all processes */
+            if (processes_sent == process_count)
+            {
+                pid_t pid;
+                /* Wait for scheduler */
+                up(clk_sem_id, 10000);
+                do
                 {
-                    /* Send to sched */
-                    DEBUG_PRINTF("[PROCGEN] Process[%d] arrived at %d\n", process_array[i]->inputPID, prevClk);
-                    sendMessage(process_array[i], 1);
-                    processes_sent++;
-                }
-                /* Generator has sent all processes */
-                if (processes_sent == process_count)
-                {
-                    pid_t pid;
-                    /* Wait for scheduler */
-                    do
-                    {
-                        int ret = 0;
-                        pid = wait(&ret);
+                    int ret = 0;
+                    pid = wait(&ret);
 
-                    } while (pid != scheduler_pid);
-                    // raise(SIGINT);
-                    goto CLEAR_RESOURCES;
-                }
-                currClk = getClk();
+                } while (pid != scheduler_pid);
+                // raise(SIGINT);
+                goto CLEAR_RESOURCES;
             }
         }
+        up(clk_sem_id, 1);
+
+        while (currClk == getClk())
+            ;
     }
 CLEAR_RESOURCES:
     // 7. Clear clock resources

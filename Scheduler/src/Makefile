@@ -29,7 +29,6 @@ $(OBJDIR):
 $(BINDIR):
 	mkdir $(BINDIR)
 
-
 $(OBJDIR)/%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -58,12 +57,18 @@ process: $(OBJDIR)/process.o
 	$(CC) $(CFLAGS) -o $(BINDIR)/$@.out $^
 
 run: clk process_generator scheduler
-	$(BINDIR)/clk.out
 	$(BINDIR)/process_generator.out $(PROC_GEN_ARGS)
-	$(BINDIR)/scheduler.out	$(SCHED_ARGS)
 
 run_test: test_generator
 	$(BINDIR)/test_generator.out
+
+run_all_algorithms:
+	chmod 0777 $(BINDIR)/*
+	cd $(BINDIR);pwd;\
+	./process_generator.out processes.txt -sch 1 &&\
+	./process_generator.out processes.txt -sch 2 &&\
+	./process_generator.out processes.txt -sch 3 -q 4 &&\
+	./process_generator.out processes.txt -sch 4 -q 4
 
 clean:
 	rm -f *.out *.o processes.txt $(OBJDIR)/*.o $(BINDIR)/*

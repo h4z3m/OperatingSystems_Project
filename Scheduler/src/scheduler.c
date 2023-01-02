@@ -35,6 +35,7 @@ static int proc_msgq = 0;
 
 /* Queue for output messages in scheduler.log */
 static Queue *outputQueue = NULL;
+
 /* Queue for memory messages in memory.log */
 static Queue *memoryQueue = NULL;
 
@@ -46,6 +47,9 @@ static SchedulingAlgorithm_t schedAlgorithm = SchedulingAlgorithm_RR;
 
 /* Total processes, obtained from generator to stop the scheduler after completing all processes*/
 static int process_count = 0;
+
+/* Queue to hold processes that are blocked for memory */
+static PriorityQueue *Memory_Buffer = NULL;
 
 /* Scheduler queues */
 static PriorityQueue *HPF_Queue = NULL;
@@ -254,45 +258,45 @@ void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority,
     */
 
     /* To control sem*/
-    union Semun semun;
+    // union Semun semun;
 
-    switch (state)
-    {
-    case ProcessState_Ready:
-        if ((pcb->PID = fork()) == 0)
-        {
-            char remTime[5] = {0};
-            char inputPID[5] = {0};
-            char *processExec = (char *)"./process.out";
+    // switch (state)
+    // {
+    // case ProcessState_Ready:
+    //     if ((pcb->PID = fork()) == 0)
+    //     {
+    //         char remTime[5] = {0};
+    //         char inputPID[5] = {0};
+    //         char *processExec = (char *)"./process.out";
 
-            sprintf(remTime, "%d", pcb->executionTime);
-            sprintf(inputPID, "%d", pcb->inputPID);
-            char *args[] = {processExec, inputPID, remTime, NULL};
-            /* Process starts here */
-            execv(args[0], args);
-        }
-        initProcSem(&pcb->sem_id, pcb->PID);
-        /* Once semaphore is obtained, down it to synchronize with process*/
-        down(pcb->sem_id);
-        /* Create a semaphore for it */
-        break;
-    case ProcessState_Running:
-        up(pcb->sem_id, pcb->remainingTime);
-        break;
-    case ProcessState_Finished:
-        up(pcb->sem_id, 1);
-        break;
-    case ProcessState_Blocked:
+    //         sprintf(remTime, "%d", pcb->executionTime);
+    //         sprintf(inputPID, "%d", pcb->inputPID);
+    //         char *args[] = {processExec, inputPID, remTime, NULL};
+    //         /* Process starts here */
+    //         execv(args[0], args);
+    //     }
+    //     initProcSem(&pcb->sem_id, pcb->PID);
+    //     /* Once semaphore is obtained, down it to synchronize with process*/
+    //     down(pcb->sem_id);
+    //     /* Create a semaphore for it */
+    //     break;
+    // case ProcessState_Running:
+    //     up(pcb->sem_id, pcb->remainingTime);
+    //     break;
+    // case ProcessState_Finished:
+    //     up(pcb->sem_id, 1);
+    //     break;
+    // case ProcessState_Blocked:
 
-        semun.val = 0; /* initial value of the semaphore, Binary semaphore */
-        if (semctl(pcb->sem_id, 0, SETVAL, semun) == -1)
-        {
-            perror("[SCHEDULER] Error in semctl\n");
-            exit(-1);
-        }
+    //     semun.val = 0; /* initial value of the semaphore, Binary semaphore */
+    //     if (semctl(pcb->sem_id, 0, SETVAL, semun) == -1)
+    //     {
+    //         perror("[SCHEDULER] Error in semctl\n");
+    //         exit(-1);
+    //     }
 
-        break;
-    }
+    //     break;
+    // }
 }
 
 /**
@@ -356,18 +360,18 @@ void outputMemory_processAllocated(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
     snprintf(buffer, 100, "At time %d allocated %d bytes for process %d from %d to %d \n",
-             getClk(), pcb->memoryNode->data, pcb->PID, pcb->memoryNode->startIndx, pcb->memoryNode->endIndx);
+             currTime, pcb->memoryNode->data, pcb->inputPID, pcb->memoryNode->startIndx, pcb->memoryNode->endIndx);
     enqueue(memoryQueue, buffer);
-    DEBUG_PRINTF(MAG "%s" RESET, buffer);
+    DEBUG_PRINTF(YEL "%s" RESET, buffer);
 }
 
 void outputMemory_processDeallocated(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
     snprintf(buffer, 100, "At time %d freed %d bytes from process %d from %d to %d \n",
-             getClk(), pcb->memoryNode->data, pcb->PID, pcb->memoryNode->startIndx, pcb->memoryNode->endIndx);
+             currTime, pcb->memoryNode->data, pcb->inputPID, pcb->memoryNode->startIndx, pcb->memoryNode->endIndx);
     enqueue(memoryQueue, buffer);
-    DEBUG_PRINTF(MAG "%s" RESET, buffer);
+    DEBUG_PRINTF(YEL "%s" RESET, buffer);
 }
 
 /**
@@ -394,7 +398,7 @@ void output_processStoppedStr(int currTime, ProcessControlBlock *pcb)
 void output_processResumedStr(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
-    int waitingTime = currTime - pcb->arrivalTime - pcb->remainingTime;
+    int waitingTime = currTime - pcb->arrivalTime - (pcb->executionTime - pcb->remainingTime);
     snprintf(buffer, 100, "At time\t%d\tprocess\t%d\tresumed arr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n",
              currTime, pcb->inputPID, pcb->arrivalTime, pcb->executionTime, pcb->remainingTime, waitingTime);
     enqueue(outputQueue, buffer);
@@ -509,50 +513,43 @@ void scheduler_HPF()
     ProcessControlBlock *newPCB = (ProcessControlBlock *)malloc(sizeof(ProcessControlBlock));
     int currClk = -1;
     int current_process_count = 0;
+    currClk = getClk();
     for (;;)
     {
-
         currClk = getClk();
+        down(clk_sem_id);
+
         DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, currClk);
 
         /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
         while (receiveMessage(&newPCB) != -1)
         {
-            // Allocating memory for the process
-            newPCB->memoryNode = Allocate(newPCB->memSize);
-
-            if (newPCB->memoryNode != NULL)
+            if (newPCB->memSize > MemorySize)
             {
+                DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d is greater than available memory %d. Cancelling process...\n" RESET,
+                             newPCB->inputPID,
+                             newPCB->memSize,
+                             MemorySize);
+                process_count--;
+            }
+            else
+            {
+                // Allocating memory for the process
+                newPCB->memoryNode = Allocate(newPCB->memSize);
 
-                /* Enqueue new process, priority = execution time*/
-                enqueuePriority(HPF_Queue, newPCB, (newPCB->priority));
-
-                outputMemory_processAllocated(getClk(), newPCB);
-
-                saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
-                current_process_count++;
-                newPCB->state = ProcessState_Ready;
-                /* Queue was empty, */
-                if (currentPCB == NULL)
+                if (newPCB->memoryNode != NULL)
                 {
-                    currentPCB = newPCB;
-                    currentPCB->startTime = currClk;
-                    saveProcessState(currentPCB,
-                                     currentPCB->remainingTime,
-                                     currentPCB->priority,
-                                     ProcessState_Running, 0);
-                    output_processStartedStr(currClk, currentPCB);
-                }
-                else
-                {
-                    // if I was less priority than the running process then save the status of the current and replace it
-                    if (newPCB->priority < currentPCB->priority)
+                    /* Enqueue new process, priority = execution time*/
+                    enqueuePriority(HPF_Queue, newPCB, (newPCB->priority));
+
+                    outputMemory_processAllocated(currClk, newPCB);
+
+                    saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
+                    current_process_count++;
+                    newPCB->state = ProcessState_Ready;
+                    /* Queue was empty, */
+                    if (currentPCB == NULL)
                     {
-                        saveProcessState(currentPCB,
-                                         currentPCB->remainingTime,
-                                         currentPCB->priority,
-                                         ProcessState_Blocked, 0);
-                        output_processStoppedStr(currClk, currentPCB);
                         currentPCB = newPCB;
                         currentPCB->startTime = currClk;
                         saveProcessState(currentPCB,
@@ -561,6 +558,34 @@ void scheduler_HPF()
                                          ProcessState_Running, 0);
                         output_processStartedStr(currClk, currentPCB);
                     }
+                    else
+                    {
+                        // if I was less priority than the running process then save the status of the current and replace it
+                        if (newPCB->priority < currentPCB->priority)
+                        {
+                            saveProcessState(currentPCB,
+                                             currentPCB->remainingTime,
+                                             currentPCB->priority,
+                                             ProcessState_Blocked, 0);
+                            output_processStoppedStr(currClk, currentPCB);
+                            currentPCB = newPCB;
+                            currentPCB->startTime = currClk;
+                            saveProcessState(currentPCB,
+                                             currentPCB->remainingTime,
+                                             currentPCB->priority,
+                                             ProcessState_Running, 0);
+                            output_processStartedStr(currClk, currentPCB);
+                        }
+                    }
+                }
+                else
+                {
+
+                    DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d\n" RESET, newPCB->inputPID, newPCB->memSize);
+                    /* Block process and hold it in queue*/
+                    // saveProcessState(newPCB, newPCB->remainingTime,
+                    //                  newPCB->priority, ProcessState_Ready, 0);
+                    enqueuePriority(Memory_Buffer, newPCB, newPCB->executionTime);
                 }
             }
         }
@@ -578,6 +603,9 @@ void scheduler_HPF()
 
             if (currentPCB->remainingTime == 0)
             {
+                outputMemory_processDeallocated(currClk, currentPCB);
+                Deallocate(currentPCB->memoryNode);
+
                 /* Save process state and dequeue it*/
                 saveProcessState(currentPCB,
                                  0,
@@ -585,12 +613,28 @@ void scheduler_HPF()
                                  ProcessState_Finished, currClk);
                 output_processFinishedStr(currClk, currentPCB);
 
-                Deallocate(currentPCB->memoryNode);
-                outputMemory_processDeallocated(currClk, currentPCB);
-
                 removeNodePriority(HPF_Queue, (void **)&currentPCB);
                 enqueue(finishedProcesses, currentPCB);
                 currentPCB = NULL;
+
+                /* Find if a waiting process can fit in memory */
+                ProcessControlBlock *tempPCB = NULL;
+                PrioNode *ptr = Memory_Buffer->front;
+                while (ptr)
+                {
+                    tempPCB = (ProcessControlBlock *)ptr->dataPtr;
+
+                    tempPCB->memoryNode = Allocate(tempPCB->memSize);
+                    if (tempPCB->memoryNode != NULL)
+                    {
+                        outputMemory_processAllocated(currClk, tempPCB);
+                        /* Insert into scheduler queue and remove from memory buffer*/
+                        enqueuePriority(HPF_Queue, tempPCB, tempPCB->executionTime);
+                        dequeuePriority(Memory_Buffer, (void **)&tempPCB);
+                        current_process_count++;
+                    }
+                    ptr = ptr->nextNode;
+                }
 
                 /* Get new process(if exists) from queue as the current is finished*/
                 if (peekPriority(HPF_Queue, (void **)&currentPCB))
@@ -619,6 +663,7 @@ void scheduler_HPF()
             if (currentPCB)
                 currentPCB->remainingTime--;
         }
+
         total_cycles++;
         while (currClk == getClk())
             ;
@@ -643,26 +688,55 @@ void scheduler_SJF()
     {
 
         currClk = getClk();
+        down(clk_sem_id);
+
         DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, currClk);
         /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
         while (receiveMessage(&newPCB) != -1)
         {
-
-            /* Enqueue new process, priority = execution time*/
-            enqueuePriority(SJF_Queue, newPCB, (newPCB->executionTime));
-            saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
-            current_process_count++;
-            newPCB->state = ProcessState_Ready;
-            /* Queue was empty, */
-            if (currentPCB == NULL)
+            if (newPCB->memSize > MemorySize)
             {
-                currentPCB = newPCB;
-                currentPCB->startTime = currClk;
-                saveProcessState(currentPCB,
-                                 currentPCB->remainingTime,
-                                 currentPCB->priority,
-                                 ProcessState_Running, 0);
-                output_processStartedStr(currClk, currentPCB);
+                DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d is greater than available memory %d. Cancelling process...\n" RESET,
+                             newPCB->inputPID,
+                             newPCB->memSize,
+                             MemorySize);
+                process_count--;
+            }
+            else
+            {
+                // Allocating memory for the process
+                newPCB->memoryNode = Allocate(newPCB->memSize);
+
+                if (newPCB->memoryNode != NULL)
+                {
+                    outputMemory_processAllocated(currClk, newPCB);
+                    /* Enqueue new process, priority = execution time*/
+                    enqueuePriority(SJF_Queue, newPCB, (newPCB->executionTime));
+                    saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
+                    current_process_count++;
+                    newPCB->state = ProcessState_Ready;
+
+                    /* Queue was empty, */
+                    if (currentPCB == NULL)
+                    {
+                        currentPCB = newPCB;
+                        currentPCB->startTime = currClk;
+                        saveProcessState(currentPCB,
+                                         currentPCB->remainingTime,
+                                         currentPCB->priority,
+                                         ProcessState_Running, 0);
+                        output_processStartedStr(currClk, currentPCB);
+                    }
+                }
+                else
+                {
+
+                    DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d\n" RESET, newPCB->inputPID, newPCB->memSize);
+                    /* Block process and hold it in queue*/
+                    // saveProcessState(newPCB, newPCB->remainingTime,
+                    //                  newPCB->priority, ProcessState_Ready, 0);
+                    enqueuePriority(Memory_Buffer, newPCB, newPCB->executionTime);
+                }
             }
         }
         /* No process is currently running */
@@ -678,6 +752,10 @@ void scheduler_SJF()
         {
             if (currentPCB->remainingTime == 0)
             {
+
+                outputMemory_processDeallocated(currClk, currentPCB);
+                Deallocate(currentPCB->memoryNode);
+
                 /* Save process state and dequeue it*/
                 saveProcessState(currentPCB,
                                  0,
@@ -687,6 +765,25 @@ void scheduler_SJF()
                 removeNodePriority(SJF_Queue, (void **)&currentPCB);
                 enqueue(finishedProcesses, currentPCB);
                 currentPCB = NULL;
+
+                /* Find if a waiting process can fit in memory */
+                ProcessControlBlock *tempPCB = NULL;
+                PrioNode *ptr = Memory_Buffer->front;
+                while (ptr)
+                {
+                    tempPCB = (ProcessControlBlock *)ptr->dataPtr;
+
+                    tempPCB->memoryNode = Allocate(tempPCB->memSize);
+                    if (tempPCB->memoryNode != NULL)
+                    {
+                        outputMemory_processAllocated(currClk, tempPCB);
+                        /* Insert into scheduler queue and remove from memory buffer*/
+                        enqueuePriority(SJF_Queue, tempPCB, tempPCB->executionTime);
+                        dequeuePriority(Memory_Buffer, (void **)&tempPCB);
+                        current_process_count++;
+                    }
+                    ptr = ptr->nextNode;
+                }
 
                 /* Get new process(if exists) from queue as the current is finished*/
                 if (dequeuePriority(SJF_Queue, (void **)&currentPCB))
@@ -724,7 +821,7 @@ void scheduler_RR(int quantum)
     ProcessControlBlock *currentPCB = NULL;
     ProcessControlBlock *newPCB = NULL;
 
-    int prevClk = -1;
+    int currClk = -1;
     int quantum_passed = 0;
     int current_process_count = 0;
     // int mtype = -1;
@@ -732,22 +829,47 @@ void scheduler_RR(int quantum)
     for (;;)
     {
 
-        prevClk = getClk();
-        DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, prevClk);
+        currClk = getClk();
+        down(clk_sem_id);
+
+        DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, currClk);
 
         /* New process has just arrived, put it at the back of queue*/
         while (receiveMessage(&newPCB) != -1)
         {
-            current_process_count++;
-            enqueue(RR_Queue, newPCB);
-            saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
-            /* Queue was empty, */
-            if (currentPCB == NULL)
+
+            if (newPCB->memSize > MemorySize)
             {
-                currentPCB = newPCB;
-                currentPCB->startTime = prevClk;
-                saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
-                output_processStartedStr(prevClk, currentPCB);
+                DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d is greater than available memory %d. Cancelling process...\n" RESET,
+                             newPCB->inputPID,
+                             newPCB->memSize,
+                             MemorySize);
+                process_count--;
+            }
+            else
+            {
+                // Allocating memory for the process
+                newPCB->memoryNode = Allocate(newPCB->memSize);
+
+                if (newPCB->memoryNode != NULL)
+                {
+                    current_process_count++;
+                    enqueue(RR_Queue, newPCB);
+                    saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
+                    /* Queue was empty, */
+                    if (currentPCB == NULL)
+                    {
+                        currentPCB = newPCB;
+                        currentPCB->startTime = currClk;
+                        saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                        output_processStartedStr(currClk, currentPCB);
+                    }
+                }
+                else
+                {
+                    DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d\n" RESET, newPCB->inputPID, newPCB->memSize);
+                    enqueuePriority(Memory_Buffer, newPCB, 1);
+                }
             }
         }
         /* No process currently running */
@@ -769,18 +891,40 @@ void scheduler_RR(int quantum)
 
             if (currentPCB->remainingTime == 0)
             {
+                outputMemory_processDeallocated(currClk, currentPCB);
+                Deallocate(currentPCB->memoryNode);
+
                 /* Reset quantum passed as we will start a new process */
                 quantum_passed = 0;
 
                 saveProcessState(currentPCB, 0,
-                                 currentPCB->priority, ProcessState_Finished, prevClk);
+                                 currentPCB->priority, ProcessState_Finished, currClk);
 
-                output_processFinishedStr(prevClk, currentPCB);
+                output_processFinishedStr(currClk, currentPCB);
 
                 /* Remove the process from the queue */
                 dequeue(RR_Queue, (void **)&currentPCB);
 
                 enqueue(finishedProcesses, currentPCB);
+
+                /* Find if a waiting process can fit in memory */
+                ProcessControlBlock *tempPCB = NULL;
+                PrioNode *ptr = Memory_Buffer->front;
+                while (ptr)
+                {
+                    tempPCB = (ProcessControlBlock *)ptr->dataPtr;
+
+                    tempPCB->memoryNode = Allocate(tempPCB->memSize);
+                    if (tempPCB->memoryNode != NULL)
+                    {
+                        outputMemory_processAllocated(currClk, tempPCB);
+                        /* Insert into scheduler queue and remove from memory buffer*/
+                        enqueue(RR_Queue, tempPCB);
+                        dequeuePriority(Memory_Buffer, (void **)&tempPCB);
+                        current_process_count++;
+                    }
+                    ptr = ptr->nextNode;
+                }
 
                 if (!peek(RR_Queue, (void **)&currentPCB))
                 {
@@ -793,11 +937,11 @@ void scheduler_RR(int quantum)
                     // Process is starting for the first time
                     if (currentPCB->state == ProcessState_Ready)
                     {
-                        currentPCB->startTime = prevClk;
-                        output_processStartedStr(prevClk, currentPCB);
+                        currentPCB->startTime = currClk;
+                        output_processStartedStr(currClk, currentPCB);
                     }
                     else
-                        output_processResumedStr(prevClk, currentPCB);
+                        output_processResumedStr(currClk, currentPCB);
 
                     saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                 }
@@ -814,7 +958,7 @@ void scheduler_RR(int quantum)
 
                 /* Remove from queue then enqueue so it's at the back */
                 saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Blocked, 0);
-                output_processStoppedStr(prevClk, currentPCB);
+                output_processStoppedStr(currClk, currentPCB);
 
                 /* Remove the process from the queue */
                 dequeue(RR_Queue, (void **)&oldProc);
@@ -828,11 +972,11 @@ void scheduler_RR(int quantum)
                 // Process is starting for the first time
                 if (currentPCB->state == ProcessState_Ready)
                 {
-                    currentPCB->startTime = prevClk;
-                    output_processStartedStr(prevClk, currentPCB);
+                    currentPCB->startTime = currClk;
+                    output_processStartedStr(currClk, currentPCB);
                 }
                 else
-                    output_processResumedStr(prevClk, currentPCB);
+                    output_processResumedStr(currClk, currentPCB);
 
                 saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
             }
@@ -846,7 +990,7 @@ void scheduler_RR(int quantum)
             quantum_passed++;
         }
         total_cycles++;
-        while (prevClk == getClk())
+        while (currClk == getClk())
             ;
     }
 }
@@ -866,7 +1010,7 @@ void scheduler_MLFL(int quantum)
     ProcessControlBlock *currentPCB = NULL;
     ProcessControlBlock *newPCB = NULL;
 
-    int prevClk = -1;
+    int currClk = -1;
     int currentOccupiedLevel, newOccupiedLevel;
     currentOccupiedLevel = newOccupiedLevel = -1;
     int quantum_passed = 0;
@@ -875,8 +1019,10 @@ void scheduler_MLFL(int quantum)
     for (;;)
     {
 
-        prevClk = getClk();
-        DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, prevClk);
+        currClk = getClk();
+        down(clk_sem_id);
+
+        DEBUG_PRINTF(BLU "[SCHEDULER] Current Time is %d\n" RESET, currClk);
 
         // printf("[MLFL] : Enqueued Process \n");
         // printf("%d\n", newOccupiedLevel);
@@ -896,10 +1042,10 @@ void scheduler_MLFL(int quantum)
                 currentPCB = newPCB;
                 // save the first occupied level to start with in the next quantam
                 currentOccupiedLevel = newOccupiedLevel;
-                currentPCB->startTime = prevClk;
+                currentPCB->startTime = currClk;
                 saveProcessState(currentPCB,
                                  currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
-                output_processStartedStr(prevClk, currentPCB);
+                output_processStartedStr(currClk, currentPCB);
             }
         }
 
@@ -923,9 +1069,9 @@ void scheduler_MLFL(int quantum)
                     quantum_passed = 0;
 
                     saveProcessState(currentPCB, 0,
-                                     currentPCB->priority, ProcessState_Finished, prevClk);
+                                     currentPCB->priority, ProcessState_Finished, currClk);
 
-                    output_processFinishedStr(prevClk, currentPCB);
+                    output_processFinishedStr(currClk, currentPCB);
 
                     /* Remove the process from the MLVL permenantly */
                     dequeueMultiLevel(MLVL_Queue, (void **)&currentPCB, i);
@@ -949,11 +1095,11 @@ void scheduler_MLFL(int quantum)
                             // Process is starting for the first time
                             if (currentPCB->state == ProcessState_Ready)
                             {
-                                currentPCB->startTime = prevClk;
-                                output_processStartedStr(prevClk, currentPCB);
+                                currentPCB->startTime = currClk;
+                                output_processStartedStr(currClk, currentPCB);
                             }
                             else
-                                output_processResumedStr(prevClk, currentPCB);
+                                output_processResumedStr(currClk, currentPCB);
 
                             saveProcessState(currentPCB,
                                              currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
@@ -963,8 +1109,8 @@ void scheduler_MLFL(int quantum)
                         {
                             // this means a new process entered while am working down here , assume ready and run it
                             peek(MLVL_Queue->Qptrs[currentOccupiedLevel], (void **)&currentPCB);
-                            currentPCB->startTime = prevClk;
-                            output_processStartedStr(prevClk, currentPCB);
+                            currentPCB->startTime = currClk;
+                            output_processStartedStr(currClk, currentPCB);
                             saveProcessState(currentPCB,
                                              currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                         }
@@ -978,7 +1124,7 @@ void scheduler_MLFL(int quantum)
                 {
                     /* Save the process */
                     saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Blocked, 0);
-                    output_processStoppedStr(prevClk, currentPCB);
+                    output_processStoppedStr(currClk, currentPCB);
                     dequeueMultiLevel(MLVL_Queue, (void **)&currentPCB, i);
                     if (i == 10)
                     {
@@ -1006,11 +1152,11 @@ void scheduler_MLFL(int quantum)
                         // Process is starting for the first time
                         if (currentPCB->state == ProcessState_Ready)
                         {
-                            currentPCB->startTime = prevClk;
-                            output_processStartedStr(prevClk, currentPCB);
+                            currentPCB->startTime = currClk;
+                            output_processStartedStr(currClk, currentPCB);
                         }
                         else
-                            output_processResumedStr(prevClk, currentPCB);
+                            output_processResumedStr(currClk, currentPCB);
 
                         saveProcessState(currentPCB, currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                     }
@@ -1018,8 +1164,8 @@ void scheduler_MLFL(int quantum)
                     {
                         // Then go to that level and run the higher priority process
                         peek(MLVL_Queue->Qptrs[currentOccupiedLevel], (void **)&currentPCB);
-                        currentPCB->startTime = prevClk;
-                        output_processStartedStr(prevClk, currentPCB);
+                        currentPCB->startTime = currClk;
+                        output_processStartedStr(currClk, currentPCB);
                         saveProcessState(currentPCB,
                                          currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                     }
@@ -1051,7 +1197,7 @@ void scheduler_MLFL(int quantum)
                     }
                     currentOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
                     currentPCB = firstPCB;
-                    output_processResumedStr(prevClk, currentPCB);
+                    output_processResumedStr(currClk, currentPCB);
                     saveProcessState(currentPCB,
                                      currentPCB->remainingTime - 1, currentPCB->priority, ProcessState_Running, 0);
                 }
@@ -1060,7 +1206,7 @@ void scheduler_MLFL(int quantum)
         }
         /* There is currently a process in execution, decrement its remaining time*/
 
-        while (prevClk == getClk())
+        while (currClk == getClk())
             ;
     }
 }
@@ -1081,7 +1227,9 @@ int main(int argc, char *argv[])
     int RR_quantum;
 
     DEBUG_PRINTF(BLU "[SCHEDULER] Scheduler started...\n");
-
+    initClkSem(&clk_sem_id);
+    initClkUsers();
+    enterClkUsers();
     initClk();
     /* Sets stdout & stderr to be unbuffered -
         to output at any time without needing \n character
@@ -1095,6 +1243,8 @@ int main(int argc, char *argv[])
     /* Initialize output queue*/
     outputQueue = createQueue();
     finishedProcesses = createQueue();
+    memoryQueue = createQueue();
+    Memory_Buffer = createPriorityQueue();
 
     /* Initialize message queue between generator & scheduler */
     getProcessMessageQueue();
