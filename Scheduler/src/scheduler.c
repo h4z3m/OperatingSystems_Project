@@ -1029,26 +1029,48 @@ void scheduler_MLFL(int quantum)
         /* New process has just arrived, put it at the back of queue*/
         while (receiveMessage(&newPCB) != -1)
         {
-            current_process_count++;
-            enqueueMultiLevel(MLVL_Queue, (void **)&newPCB, newPCB->priority);
-            newOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
-            // printf("[MLFL] : Enqueued Process \n");
-            // printf("%d\n", newOccupiedLevel);
-            saveProcessState(newPCB,
-                             newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
-            /* Queue was empty, */
-            if (currentOccupiedLevel == -1)
+
+            if (newPCB->memSize > MemorySize)
             {
-                currentPCB = newPCB;
-                // save the first occupied level to start with in the next quantam
-                currentOccupiedLevel = newOccupiedLevel;
-                currentPCB->startTime = currClk;
-                saveProcessState(currentPCB,
-                                 currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
-                output_processStartedStr(currClk, currentPCB);
+                DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d is greater than available memory %d. Cancelling process...\n" RESET,
+                             newPCB->inputPID,
+                             newPCB->memSize,
+                             MemorySize);
+                process_count--;
+            }
+            else
+            {
+                // Allocating memory for the process
+                newPCB->memoryNode = Allocate(newPCB->memSize);
+
+                if (newPCB->memoryNode != NULL)
+                {
+                    current_process_count++;
+                    enqueueMultiLevel(MLVL_Queue, (void **)&newPCB, newPCB->priority);
+                    newOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
+                    // printf("[MLFL] : Enqueued Process \n");
+                    // printf("%d\n", newOccupiedLevel);
+                    saveProcessState(newPCB,
+                                     newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
+                    /* Queue was empty, */
+                    if (currentOccupiedLevel == -1)
+                    {
+                        currentPCB = newPCB;
+                        // save the first occupied level to start with in the next quantam
+                        currentOccupiedLevel = newOccupiedLevel;
+                        currentPCB->startTime = currClk;
+                        saveProcessState(currentPCB,
+                                         currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
+                        output_processStartedStr(currClk, currentPCB);
+                    }
+                }
+                else
+                {
+                    DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d\n" RESET, newPCB->inputPID, newPCB->memSize);
+                    enqueuePriority(Memory_Buffer, newPCB, 1);
+                }
             }
         }
-
         // while no current pcb running and the multilevel queue is empty , then ideal cycles ++
         if (!currentPCB && currentOccupiedLevel == -1)
         {
@@ -1065,6 +1087,8 @@ void scheduler_MLFL(int quantum)
 
                 if (currentPCB->remainingTime == 0)
                 {
+                    outputMemory_processDeallocated(currClk, currentPCB);
+                    Deallocate(currentPCB->memoryNode);
                     /* Reset quantum passed as we will start a new process */
                     quantum_passed = 0;
 
@@ -1077,6 +1101,25 @@ void scheduler_MLFL(int quantum)
                     dequeueMultiLevel(MLVL_Queue, (void **)&currentPCB, i);
 
                     enqueue(finishedProcesses, currentPCB);
+
+                    /* Find if a waiting process can fit in memory */
+                    ProcessControlBlock *tempPCB = NULL;
+                    PrioNode *ptr = Memory_Buffer->front;
+                    while (ptr)
+                    {
+                        tempPCB = (ProcessControlBlock *)ptr->dataPtr;
+
+                        tempPCB->memoryNode = Allocate(tempPCB->memSize);
+                        if (tempPCB->memoryNode != NULL)
+                        {
+                            outputMemory_processAllocated(currClk, tempPCB);
+                            /* Insert into scheduler queue and remove from memory buffer*/
+                            enqueueMultiLevel(MLVL_Queue, (void **)&tempPCB, tempPCB->priority);
+                            dequeuePriority(Memory_Buffer, (void **)&tempPCB);
+                            current_process_count++;
+                        }
+                        ptr = ptr->nextNode;
+                    }
 
                     currentOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
 
