@@ -57,6 +57,11 @@ static PriorityQueue *SJF_Queue = NULL;
 static MultiLevelQueue *MLVL_Queue = NULL;
 static Queue *RR_Queue = NULL;
 
+/* Output file names*/
+static char memorylog_filename[30] = {0};
+static char schedulerlog_filename[30] = {0};
+static char schedulerperf_filename[30] = {0};
+
 /************************************************* IPC functions *************************************************/
 
 /**
@@ -85,21 +90,6 @@ void initProcSem(int *proc_sem_id, pid_t pid)
     if (semctl(*proc_sem_id, 0, SETVAL, semun) == -1)
     {
         perror("[SCHEDULER] Error in semctl\n");
-        exit(-1);
-    }
-}
-
-/**
- * @brief   Deinitializes the semaphore between scheduler and process
- *
- * @param proc_sem_id   Process semaphore ID
- */
-void deInitProcSem(int *proc_sem_id)
-{
-    union Semun semun;
-    if (semctl(*proc_sem_id, 0, IPC_RMID, semun) == -1)
-    {
-        perror("[SCHEDULER] Error in semctl - deInitProcSem()\n");
         exit(-1);
     }
 }
@@ -142,7 +132,7 @@ void freeAllResources()
     while (ptr)
     {
         pcb = (ProcessControlBlock *)ptr->dataPtr;
-        deInitProcSem(&pcb->sem_id);
+        destroySem(pcb->sem_id);
         free(pcb);
         ptr = ptr->nextNode;
     }
@@ -257,46 +247,33 @@ void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority,
 
     */
 
-    /* To control sem*/
-    // union Semun semun;
+    switch (state)
+    {
+    case ProcessState_Ready:
+        if ((pcb->PID = fork()) == 0)
+        {
+            char remTime[5] = {0};
+            char inputPID[5] = {0};
+            char *processExec = (char *)"./process.out";
 
-    // switch (state)
-    // {
-    // case ProcessState_Ready:
-    //     if ((pcb->PID = fork()) == 0)
-    //     {
-    //         char remTime[5] = {0};
-    //         char inputPID[5] = {0};
-    //         char *processExec = (char *)"./process.out";
-
-    //         sprintf(remTime, "%d", pcb->executionTime);
-    //         sprintf(inputPID, "%d", pcb->inputPID);
-    //         char *args[] = {processExec, inputPID, remTime, NULL};
-    //         /* Process starts here */
-    //         execv(args[0], args);
-    //     }
-    //     initProcSem(&pcb->sem_id, pcb->PID);
-    //     /* Once semaphore is obtained, down it to synchronize with process*/
-    //     down(pcb->sem_id);
-    //     /* Create a semaphore for it */
-    //     break;
-    // case ProcessState_Running:
-    //     up(pcb->sem_id, pcb->remainingTime);
-    //     break;
-    // case ProcessState_Finished:
-    //     up(pcb->sem_id, 1);
-    //     break;
-    // case ProcessState_Blocked:
-
-    //     semun.val = 0; /* initial value of the semaphore, Binary semaphore */
-    //     if (semctl(pcb->sem_id, 0, SETVAL, semun) == -1)
-    //     {
-    //         perror("[SCHEDULER] Error in semctl\n");
-    //         exit(-1);
-    //     }
-
-    //     break;
-    // }
+            sprintf(remTime, "%d", pcb->executionTime);
+            sprintf(inputPID, "%d", pcb->inputPID);
+            char *args[] = {processExec, inputPID, remTime, NULL};
+            /* Process starts here */
+            execv(args[0], args);
+        }
+        kill(pcb->PID, SIGSTOP);
+        break;
+    case ProcessState_Running:
+        kill(pcb->PID, SIGCONT);
+        break;
+    case ProcessState_Finished:
+        kill(pcb->PID, SIGCONT);
+        break;
+    case ProcessState_Blocked:
+        kill(pcb->PID, SIGSTOP);
+        break;
+    }
 }
 
 /**
@@ -430,7 +407,7 @@ void output_processFinishedStr(int currTime, ProcessControlBlock *pcb)
  */
 void generateSchedulerLog(Queue *lines)
 {
-    FILE *logfile = fopen(SCHEDULER_LOG_FILENAME, "w");
+    FILE *logfile = fopen(schedulerlog_filename, "w");
     char *line = NULL;
     fputs("#At time x process y state arr w total z remain y wait k\n", logfile);
     while (dequeue(lines, (void **)&line))
@@ -449,7 +426,7 @@ void generateSchedulerLog(Queue *lines)
  */
 void generateMemoryLog(Queue *lines)
 {
-    FILE *logfile = fopen("memory.log", "w");
+    FILE *logfile = fopen(memorylog_filename, "w");
     char *line = NULL;
     fputs("#At time x allocated y bytes for process z from i to j\n", logfile);
     while (dequeue(lines, (void **)&line))
@@ -468,15 +445,17 @@ void generateMemoryLog(Queue *lines)
  */
 void generateSchedulerPerf(Queue *processInfoQueue)
 {
+    ProcessControlBlock *temp = processInfoQueue->rear->dataPtr;
+    total_cycles = temp->finishTime;
     /* Calculate */
     float utilizationPercent = ((float)(total_cycles - idle_cycles) / total_cycles) * 100;
     float WTA = calculateAverageWeightedTATime(processInfoQueue, processInfoQueue->capacity);
     float avgWaiting = calculateAverageWaitingTime(processInfoQueue, processInfoQueue->capacity);
 
-    printf("\nCPU utilization = %.2f%%\nAvg WTA = %.2f\nAvg Waiting = %.1f\n",
+    printf("\nCPU utilization = %.2f%%\nAvg WTA = %.2f\nAvg Waiting = %.1f\nTotal cycles=%d\nIdle cycles=%d\n",
            utilizationPercent,
            WTA,
-           avgWaiting);
+           avgWaiting, total_cycles, idle_cycles);
 
     /* Round */
 
@@ -486,7 +465,7 @@ void generateSchedulerPerf(Queue *processInfoQueue)
 
     /* Write to file */
 
-    FILE *perfFile = fopen(SCHEDULER_PERF_FILENAME, "w");
+    FILE *perfFile = fopen(schedulerperf_filename, "w");
 
     fprintf(perfFile, "CPU utilization = %.2f%%\nAvg WTA = %.2f\nAvg Waiting = %.1f",
             utilizationPercent,
@@ -596,6 +575,7 @@ void scheduler_HPF()
             {
                 return;
             }
+            DEBUG_PRINTF("[SCHEDULER] I am idle.............\n");
             idle_cycles++;
         }
         else
@@ -627,6 +607,7 @@ void scheduler_HPF()
                     tempPCB->memoryNode = Allocate(tempPCB->memSize);
                     if (tempPCB->memoryNode != NULL)
                     {
+                        saveProcessState(tempPCB, tempPCB->remainingTime, tempPCB->priority, ProcessState_Ready, 0);
                         outputMemory_processAllocated(currClk, tempPCB);
                         /* Insert into scheduler queue and remove from memory buffer*/
                         enqueuePriority(HPF_Queue, tempPCB, tempPCB->executionTime);
@@ -744,8 +725,10 @@ void scheduler_SJF()
         {
             if (process_count == current_process_count)
             {
+
                 return;
             }
+            DEBUG_PRINTF("[SCHEDULER] I am idle.............\n");
             idle_cycles++;
         }
         else
@@ -776,6 +759,7 @@ void scheduler_SJF()
                     tempPCB->memoryNode = Allocate(tempPCB->memSize);
                     if (tempPCB->memoryNode != NULL)
                     {
+                        saveProcessState(tempPCB, tempPCB->remainingTime, tempPCB->priority, ProcessState_Ready, 0);
                         outputMemory_processAllocated(currClk, tempPCB);
                         /* Insert into scheduler queue and remove from memory buffer*/
                         enqueuePriority(SJF_Queue, tempPCB, tempPCB->executionTime);
@@ -879,6 +863,7 @@ void scheduler_RR(int quantum)
             {
                 return;
             }
+            DEBUG_PRINTF("[SCHEDULER] I am idle.............\n");
             idle_cycles++;
         }
         else
@@ -917,6 +902,9 @@ void scheduler_RR(int quantum)
                     tempPCB->memoryNode = Allocate(tempPCB->memSize);
                     if (tempPCB->memoryNode != NULL)
                     {
+                        saveProcessState(tempPCB, tempPCB->remainingTime, tempPCB->priority, ProcessState_Ready, 0);
+
+                        tempPCB->state = ProcessState_Ready;
                         outputMemory_processAllocated(currClk, tempPCB);
                         /* Insert into scheduler queue and remove from memory buffer*/
                         enqueue(RR_Queue, tempPCB);
@@ -1079,6 +1067,7 @@ void scheduler_MLFL(int quantum)
                 return;
             }
             idle_cycles++;
+            DEBUG_PRINTF("[SCHEDULER] I am idle.............\n");
         }
         else
         {
@@ -1112,6 +1101,7 @@ void scheduler_MLFL(int quantum)
                         tempPCB->memoryNode = Allocate(tempPCB->memSize);
                         if (tempPCB->memoryNode != NULL)
                         {
+                            saveProcessState(tempPCB, tempPCB->remainingTime, tempPCB->priority, ProcessState_Ready, 0);
                             outputMemory_processAllocated(currClk, tempPCB);
                             /* Insert into scheduler queue and remove from memory buffer*/
                             enqueueMultiLevel(MLVL_Queue, (void **)&tempPCB, tempPCB->priority);
@@ -1154,6 +1144,7 @@ void scheduler_MLFL(int quantum)
                             peek(MLVL_Queue->Qptrs[currentOccupiedLevel], (void **)&currentPCB);
                             currentPCB->startTime = currClk;
                             output_processStartedStr(currClk, currentPCB);
+
                             saveProcessState(currentPCB,
                                              currentPCB->remainingTime, currentPCB->priority, ProcessState_Running, 0);
                         }
@@ -1271,8 +1262,6 @@ int main(int argc, char *argv[])
 
     DEBUG_PRINTF(BLU "[SCHEDULER] Scheduler started...\n");
     initClkSem(&clk_sem_id);
-    initClkUsers();
-    enterClkUsers();
     initClk();
     /* Sets stdout & stderr to be unbuffered -
         to output at any time without needing \n character
@@ -1302,23 +1291,35 @@ int main(int argc, char *argv[])
     case SchedulingAlgorithm_HPF:
         DEBUG_PRINTF("[SCHEDULER] Starting HPF...\n");
         scheduler_HPF();
+        strcpy(schedulerlog_filename, "HPF_scheduler.log");
+        strcpy(schedulerperf_filename, "HPF_scheduler.perf");
+        strcpy(memorylog_filename, "HPF_memory.log");
         DEBUG_PRINTF("[SCHEDULER] Stopping HPF...\n");
         break;
     case SchedulingAlgorithm_RR:
         DEBUG_PRINTF("[SCHEDULER] Starting RR...\n");
         RR_quantum = atoi(argv[2]);
         scheduler_RR(RR_quantum);
+        strcpy(schedulerlog_filename, "RR_scheduler.log");
+        strcpy(schedulerperf_filename, "RR_scheduler.perf");
+        strcpy(memorylog_filename, "RR_memory.log");
         DEBUG_PRINTF("[SCHEDULER] Stopping RR...\n");
         break;
     case SchedulingAlgorithm_SJF:
         DEBUG_PRINTF("[SCHEDULER] Starting SJF...\n");
         scheduler_SJF();
+        strcpy(schedulerlog_filename, "SJF_scheduler.log");
+        strcpy(schedulerperf_filename, "SJF_scheduler.perf");
+        strcpy(memorylog_filename, "SJF_memory.log");
         DEBUG_PRINTF("[SCHEDULER] Stopping SJF...\n");
         break;
     case SchedulingAlgorithm_MLFL:
         DEBUG_PRINTF("[SCHEDULER] Starting MLFL...\n");
         RR_quantum = atoi(argv[2]);
         scheduler_MLFL(RR_quantum);
+        strcpy(schedulerlog_filename, "MLFL_scheduler.log");
+        strcpy(schedulerperf_filename, "MLFL_scheduler.perf");
+        strcpy(memorylog_filename, "MLFL_memory.log");
         DEBUG_PRINTF("[SCHEDULER] Stopping MLFL...\n");
         break;
     }

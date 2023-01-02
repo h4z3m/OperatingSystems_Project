@@ -4,9 +4,9 @@
  * @brief
  * @version 1.0
  * @date 2022-12-27
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 #include "../include/headers.h"
 #include "../include/types.h"
@@ -15,7 +15,7 @@
 int remainingtime;
 
 int sem_id;
-
+int pid;
 void getSem(int *semid)
 {
     int key_id = ftok("./", getpid());
@@ -32,6 +32,12 @@ void getSem(int *semid)
     }
 }
 
+void SIGCONT_HANDLER(int signum)
+{
+
+    DEBUG_PRINTF(GRN "[PROCESS %d] Received continue signal\n" RESET, pid);
+    signal(SIGCONT, SIGCONT_HANDLER);
+}
 /**
  * @brief This file simulates the process which needs to be CPU bound.
  * It runs for some time depending on the algorithm then gives back control to the
@@ -43,32 +49,21 @@ void getSem(int *semid)
  */
 int main(int agrc, char *argv[])
 {
-    int pid = atoi(argv[1]);
+ 
+    /* Setup handlers*/
+    // signal(SIGCONT, SIGCONT_HANDLER);
+
+    pid = atoi(argv[1]);
     remainingtime = atoi(argv[2]);
-    DEBUG_PRINTF(RED "[PROCESS %d] Created, remaining time =%d\n" RESET, pid, remainingtime);
+    DEBUG_PRINTF(RED "[PROCESS %d] Created, remaining time = %d\n" RESET, pid, remainingtime);
     initClk();
-    getSem(&sem_id);
 
-    // remainingtime = ??;
     int currClk = -1;
-    /* Initially set the semaphore to zero to simulate blocked process*/
-    union Semun semun = {0};
-    semun.val = 0;
-    if (semctl(sem_id, 0, SETVAL, semun) == -1)
-    {
-        perror("[SCHEDULER] Error in semctl\n");
-        exit(-1);
-    }
-    /* Up semaphore to synchronize with scheduler */
-    up(sem_id, 1);
-
     while (remainingtime > 0)
     {
-        /* Process tries to decrement semaphore, blocks until becomes non zero with allowed run time*/
-        down(sem_id);
-        DEBUG_PRINTF(RED "[PROCESS %d] Downed, remaining time =%d\n" RESET, pid, remainingtime);
-        remainingtime--;
         currClk = getClk();
+        DEBUG_PRINTF(RED "[PROCESS %d] Remaining time = %d\n" RESET, pid, remainingtime);
+        remainingtime--;
         while (currClk == getClk())
             ;
     }

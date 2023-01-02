@@ -30,10 +30,10 @@ int main(int argc, char *argv[])
         perror("Error in semctl\n");
         exit(-1);
     }
-    initClkUsers();
+    // initClkUsers();
     printf("Clock Starting...\n");
     signal(SIGINT, cleanup);
-    int clk = -1;
+    int clk = 0;
     // Create shared memory for one integer variable 4 bytes
     shmid = shmget(SHKEY, 4, IPC_CREAT | 0644);
     if ((long)shmid == -1)
@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
     }
     *shmaddr = clk; /* Initialize shared memory */
 
-    int old_users = getClkUsers();
+    // int old_users = getClkUsers();
     sleep(5);
 
     while (1)

@@ -67,8 +67,8 @@ run_all_algorithms:
 	cd $(BINDIR);pwd;\
 	./process_generator.out processes.txt -sch 1 &&\
 	./process_generator.out processes.txt -sch 2 &&\
-	./process_generator.out processes.txt -sch 3 -q 4 &&\
-	./process_generator.out processes.txt -sch 4 -q 4
+	./process_generator.out processes.txt -sch 3 -q 2 &&\
+	./process_generator.out processes.txt -sch 4 -q 2
 
 clean:
 	rm -f *.out *.o processes.txt $(OBJDIR)/*.o $(BINDIR)/*

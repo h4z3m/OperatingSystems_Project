@@ -148,6 +148,17 @@ void exitClkUsers()
     (*shm_users_addr)--;
 }
 
+void destroySem(int semid)
+{
+    union Semun semun;
+    if (semctl(semid, 0, IPC_RMID, semun) == -1)
+    {
+        perror("[SCHEDULER] Error in semctl - deInitProcSem()\n");
+        exit(-1);
+    }
+}
+
+
 /*
  * All processes call this function at the beginning to establish communication between them and the clock module.
  * Again, remember that the clock is only emulation!
@@ -196,8 +207,6 @@ void initClkSem(int *semid)
         perror("Error in create sem\n");
         exit(-1);
     }
-
-    
 }
 
 /*
@@ -207,7 +216,6 @@ void initClkSem(int *semid)
  * Input: terminateAll: a flag to indicate whether that this is the end of simulation.
  *                      It terminates the whole system and releases resources.
  */
-
 void destroyClk(bool terminateAll)
 {
     shmdt(shmaddr);
@@ -216,6 +224,5 @@ void destroyClk(bool terminateAll)
         killpg(getpgrp(), SIGINT);
     }
 }
-
 
 #endif // HEADERS_H

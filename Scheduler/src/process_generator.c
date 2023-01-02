@@ -248,8 +248,6 @@ int main(int argc, char *argv[])
 
     // 4. Use this function after creating the clock process to initialize clock.
     initClkSem(&clk_sem_id);
-    initClkUsers();
-    enterClkUsers();
     initClk();
     // To get time use this function.
     int prevClk = getClk();
@@ -318,7 +316,7 @@ void clearResources(int signum)
 
     /* Signal all child process to terminate if not terminated*/
     destroyClk(true);
-
+    destroySem(clk_sem_id);
     /* Remove message queue*/
     msgctl(proc_msgq, IPC_RMID, (struct msqid_ds *)0);
     exit(0);
