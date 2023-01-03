@@ -82,9 +82,8 @@ void destroyQueue(Queue *q)
     while (q->front != NULL)
     {
         dequeue(q, &temp);
-        if (temp)
-            free(temp);
     }
+    free(q);
 }
 
 /************************************************* Priority Queue *************************************************/
@@ -207,14 +206,17 @@ void removeNodePriority(PriorityQueue *q, void **dataToDelete)
 
 void destroyPriorityQueue(PriorityQueue *q)
 {
+    if (q == NULL)
+    {
+        return;
+    }
     void *temp;
 
     // Free (Dequeue) all nodes in the queue
     while (dequeuePriority(q, &temp))
     {
-        if (temp)
-            free(temp);
     }
+    free(q);
 }
 
 /************************************************* Multilevel Queue *************************************************/
@@ -262,7 +264,6 @@ void destroyMultiLevelQueue(MultiLevelQueue *q)
 }
 
 /************************************************* Buddy system tree *************************************************/
-
 
 treeNode *treeRoot = (void *)(0);
 

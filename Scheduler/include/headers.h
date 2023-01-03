@@ -38,7 +38,7 @@ typedef short bool;
 #define SEM_PROC_SCHED_KEY 500
 #define SEM_CLK_KEY 600
 #define SHM_USERS_COUNT 700
-
+#define SEM_UP_VAL  10000
 #define RED "\x1B[31m"
 #define GRN "\x1B[32m"
 #define YEL "\x1B[33m"
@@ -47,9 +47,6 @@ typedef short bool;
 #define CYN "\x1B[36m"
 #define WHT "\x1B[37m"
 #define RESET "\x1B[0m"
-
-#define SCHEDULER_LOG_FILENAME ((const char *)"scheduler.log")
-#define SCHEDULER_PERF_FILENAME ((const char *)"scheduler.perf")
 
 #define DEBUG_MODE 1
 #if DEBUG_MODE == 1
@@ -133,21 +130,6 @@ int getClk()
     return *shmaddr;
 }
 
-int getClkUsers()
-{
-    return (*shm_users_addr);
-}
-
-void enterClkUsers()
-{
-    (*shm_users_addr)++;
-}
-
-void exitClkUsers()
-{
-    (*shm_users_addr)--;
-}
-
 void destroySem(int semid)
 {
     union Semun semun;
@@ -157,7 +139,6 @@ void destroySem(int semid)
         exit(-1);
     }
 }
-
 
 /*
  * All processes call this function at the beginning to establish communication between them and the clock module.
@@ -176,6 +157,7 @@ void initClk()
     shmaddr = (int *)shmat(shmid, (void *)0, 0);
 }
 
+/********************************** Semaphores for clock synchronization ***********************************/
 int initClkUsers()
 {
     int shmid = shmget(SHM_USERS_COUNT, 4, IPC_CREAT | 0666);
@@ -192,7 +174,18 @@ int initClkUsers()
     }
     return shmid;
 }
-
+int getClkUsers()
+{
+    return (*shm_users_addr);
+}
+void enterClkUsers()
+{
+    (*shm_users_addr)++;
+}
+void exitClkUsers()
+{
+    (*shm_users_addr)--;
+}
 void initClkSem(int *semid)
 {
     int key_id = ftok("./", getpid());
@@ -208,6 +201,7 @@ void initClkSem(int *semid)
         exit(-1);
     }
 }
+/********************************************************************************************************/
 
 /*
  * All processes call this function at the end to release the communication

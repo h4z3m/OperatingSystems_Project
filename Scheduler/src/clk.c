@@ -50,12 +50,14 @@ int main(int argc, char *argv[])
     *shmaddr = clk; /* Initialize shared memory */
 
     // int old_users = getClkUsers();
-    sleep(5);
+    sleep(10);
 
     while (1)
     {
-        usleep(1000 * 100);
         // sleep(1);
+        usleep(1000 * 100);
+        /* UNUSED: Clock synchronization if actual simulation speed is very high 
+            or scheduler takes longer than the sleep interval */
         // DEBUG_PRINTF("[CLK] Current clk users = %d\n", getClkUsers());
         // old_users = getClkUsers();
         // down_value(clk_sem_id, -old_users);
@@ -64,7 +66,7 @@ int main(int argc, char *argv[])
         // {
         //     down_value(clk_sem_id, -(getClkUsers() - old_users));
         // }
-        // sleep(1);
         (*shmaddr)++;
     }
+    
 }

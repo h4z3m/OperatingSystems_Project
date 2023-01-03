@@ -15,6 +15,12 @@
 /* Message queue ID between scheduler and process generator*/
 static int proc_msgq = 0;
 
+/* Clock process actual PID*/
+static pid_t clk_pid;
+
+/* Scheduler process actual PID*/
+static pid_t scheduler_pid;
+
 void clearResources(int);
 /**
  * @brief Creates a new process with given data, and returns a pointer to it.
@@ -237,12 +243,12 @@ int main(int argc, char *argv[])
     /* Argument buffers */
     char clkexec[] = "clk.out";
     char *clkargs[] = {clkexec, NULL};
-    pid_t clk_pid = fork();
+    clk_pid = fork();
     if (clk_pid == 0)
         execv(clkargs[0], clkargs);
 
     // Create scheduler process
-    pid_t scheduler_pid = fork();
+    scheduler_pid = fork();
     if (scheduler_pid == 0)
         execv(schedargs[0], schedargs);
 
@@ -282,14 +288,12 @@ int main(int argc, char *argv[])
             {
                 pid_t pid;
                 /* Wait for scheduler */
-                up(clk_sem_id, 10000);
+                up(clk_sem_id, SEM_UP_VAL);
                 do
                 {
                     int ret = 0;
-                    pid = wait(&ret);
-
+                    pid = waitpid(scheduler_pid, &ret, WUNTRACED);
                 } while (pid != scheduler_pid);
-                // raise(SIGINT);
                 goto CLEAR_RESOURCES;
             }
         }
@@ -300,6 +304,8 @@ int main(int argc, char *argv[])
     }
 CLEAR_RESOURCES:
     // 7. Clear clock resources
+
+    /* Clear semaphores and message queue */
     clearResources(0);
 }
 
@@ -312,10 +318,18 @@ CLEAR_RESOURCES:
  */
 void clearResources(int signum)
 {
+    /* Send signal to clock to terminate then wait for it*/
+    kill(clk_pid, SIGINT);
+    pid_t pid;
+    do
+    {
+        int ret = 0;
+        pid = waitpid(clk_pid, &ret, WUNTRACED);
+    } while (pid != clk_pid);
     DEBUG_PRINTF("[PROCGEN] Terminating...\n");
 
     /* Signal all child process to terminate if not terminated*/
-    destroyClk(true);
+    destroyClk(false);
     destroySem(clk_sem_id);
     /* Remove message queue*/
     msgctl(proc_msgq, IPC_RMID, (struct msqid_ds *)0);

@@ -16,6 +16,7 @@ int remainingtime;
 
 int sem_id;
 int pid;
+
 void getSem(int *semid)
 {
     int key_id = ftok("./", getpid());
@@ -49,7 +50,7 @@ void SIGCONT_HANDLER(int signum)
  */
 int main(int agrc, char *argv[])
 {
- 
+
     /* Setup handlers*/
     // signal(SIGCONT, SIGCONT_HANDLER);
 
@@ -71,5 +72,5 @@ int main(int agrc, char *argv[])
     destroyClk(false);
     DEBUG_PRINTF(RED "[PROCESS %d] Terminating...\n" RESET, pid);
 
-    return 0;
+    exit(0);
 }

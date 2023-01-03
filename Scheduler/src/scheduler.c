@@ -57,7 +57,7 @@ static PriorityQueue *SJF_Queue = NULL;
 static MultiLevelQueue *MLVL_Queue = NULL;
 static Queue *RR_Queue = NULL;
 
-/* Output file names*/
+/* Output file names */
 static char memorylog_filename[30] = {0};
 static char schedulerlog_filename[30] = {0};
 static char schedulerperf_filename[30] = {0};
@@ -101,14 +101,11 @@ void initProcSem(int *proc_sem_id, pid_t pid)
 void freeAllResources()
 {
     static bool freed_flag = false;
+
     /* To check if this function was entered more than once */
     if (freed_flag)
         return;
     freed_flag = true;
-
-    /* Free queues */
-    destroyQueue(finishedProcesses);
-    destroyQueue(outputQueue);
 
     /* Delete the queue associated with algorithm*/
     switch (schedAlgorithm)
@@ -129,13 +126,28 @@ void freeAllResources()
     /* Free process semaphores & process structs */
     ProcessControlBlock *pcb;
     Node *ptr = finishedProcesses->front;
+
     while (ptr)
     {
         pcb = (ProcessControlBlock *)ptr->dataPtr;
-        destroySem(pcb->sem_id);
+        pid_t pid;
+        /* Wait for each process so it doesn't become zombie */
+        DEBUG_PRINTF("[SCHEDULER] Waiting for process %d\n", pcb->inputPID);
+        do
+        {
+            int ret;
+            pid = waitpid(pcb->PID, &ret, WUNTRACED);
+        } while (pid != pcb->PID);
+
+        DEBUG_PRINTF("[SCHEDULER] Waited successfully for process %d\n", pcb->inputPID);
         free(pcb);
         ptr = ptr->nextNode;
     }
+    /* Free queues */
+    destroyQueue(finishedProcesses);
+    destroyQueue(outputQueue);
+    destroyQueue(memoryQueue);
+    destroyPriorityQueue(Memory_Buffer);
 }
 
 /**
@@ -231,20 +243,18 @@ void saveProcessState(ProcessControlBlock *pcb, int remainingTime, int priority,
     pcb->finishTime = finishTime;
     pcb->state = state;
     /*
-
-        Process is just created for the first time:
+        *Process is just created for the first time:
         - Fork it and pass its execution time as arg
-        - Create a semaphore for it (process stays blocked)
+        - Pause the process by sending SIGSTOP to it
 
-        Process has stopped (still not finished):
-        - Down its semaphore so it's blocked
+        *Process has stopped (still not finished):
+        - Pause the process by sending SIGSTOP to it
 
-        Process has resumed:
-        - Up its semaphore
+        *Process has resumed:
+        - Continue by sending SIGCONT to it
 
-        Process has finished:
-        - Up its semaphore so it finishes on its own
-
+        *Process has finished:
+        - Continue by sending SIGCONT to it
     */
 
     switch (state)
@@ -333,6 +343,12 @@ void output_processStartedStr(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF(MAG "%s" RESET, buffer);
 }
 
+/**
+ * @brief   Outputs the memory allocation string and queues it to the memory queue
+ *
+ * @param currTime  Start time of the process
+ * @param pcb       Pointer to process control block
+ */
 void outputMemory_processAllocated(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
@@ -342,6 +358,12 @@ void outputMemory_processAllocated(int currTime, ProcessControlBlock *pcb)
     DEBUG_PRINTF(YEL "%s" RESET, buffer);
 }
 
+/**
+ * @brief   Outputs the memory de-allocation string and queues it to the memory queue
+ *
+ * @param currTime  Start time of the process
+ * @param pcb       Pointer to process control block
+ */
 void outputMemory_processDeallocated(int currTime, ProcessControlBlock *pcb)
 {
     char *buffer = (char *)malloc(sizeof(char) * 100);
@@ -445,14 +467,14 @@ void generateMemoryLog(Queue *lines)
  */
 void generateSchedulerPerf(Queue *processInfoQueue)
 {
-    ProcessControlBlock *temp = processInfoQueue->rear->dataPtr;
+    ProcessControlBlock *temp = (ProcessControlBlock *)processInfoQueue->rear->dataPtr;
     total_cycles = temp->finishTime;
     /* Calculate */
     float utilizationPercent = ((float)(total_cycles - idle_cycles) / total_cycles) * 100;
     float WTA = calculateAverageWeightedTATime(processInfoQueue, processInfoQueue->capacity);
     float avgWaiting = calculateAverageWaitingTime(processInfoQueue, processInfoQueue->capacity);
 
-    printf("\nCPU utilization = %.2f%%\nAvg WTA = %.2f\nAvg Waiting = %.1f\nTotal cycles=%d\nIdle cycles=%d\n",
+    printf("\nCPU utilization = %.2f%%\nAvg WTA = %.2f\nAvg Waiting = %.1f\nTotal cycles = %d\nIdle cycles = %d\n",
            utilizationPercent,
            WTA,
            avgWaiting, total_cycles, idle_cycles);
@@ -540,7 +562,7 @@ void scheduler_HPF()
                     else
                     {
                         // if I was less priority than the running process then save the status of the current and replace it
-                        if (newPCB->priority < currentPCB->priority)
+                        if (newPCB->priority < currentPCB->priority && currentPCB->remainingTime != 0)
                         {
                             saveProcessState(currentPCB,
                                              currentPCB->remainingTime,
@@ -561,10 +583,7 @@ void scheduler_HPF()
                 {
 
                     DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d\n" RESET, newPCB->inputPID, newPCB->memSize);
-                    /* Block process and hold it in queue*/
-                    // saveProcessState(newPCB, newPCB->remainingTime,
-                    //                  newPCB->priority, ProcessState_Ready, 0);
-                    enqueuePriority(Memory_Buffer, newPCB, newPCB->executionTime);
+                    enqueuePriority(Memory_Buffer, newPCB, newPCB->priority);
                 }
             }
         }
@@ -610,7 +629,7 @@ void scheduler_HPF()
                         saveProcessState(tempPCB, tempPCB->remainingTime, tempPCB->priority, ProcessState_Ready, 0);
                         outputMemory_processAllocated(currClk, tempPCB);
                         /* Insert into scheduler queue and remove from memory buffer*/
-                        enqueuePriority(HPF_Queue, tempPCB, tempPCB->executionTime);
+                        enqueuePriority(HPF_Queue, tempPCB, tempPCB->priority);
                         dequeuePriority(Memory_Buffer, (void **)&tempPCB);
                         current_process_count++;
                     }
@@ -838,6 +857,7 @@ void scheduler_RR(int quantum)
                 if (newPCB->memoryNode != NULL)
                 {
                     current_process_count++;
+                    outputMemory_processAllocated(currClk, newPCB);
                     enqueue(RR_Queue, newPCB);
                     saveProcessState(newPCB, newPCB->remainingTime, newPCB->priority, ProcessState_Ready, 0);
                     /* Queue was empty, */
@@ -1033,7 +1053,9 @@ void scheduler_MLFL(int quantum)
 
                 if (newPCB->memoryNode != NULL)
                 {
+
                     current_process_count++;
+                    outputMemory_processAllocated(currClk, newPCB);
                     enqueueMultiLevel(MLVL_Queue, (void **)&newPCB, newPCB->priority);
                     newOccupiedLevel = multiLevelisEmpty(MLVL_Queue);
                     // printf("[MLFL] : Enqueued Process \n");
@@ -1055,7 +1077,7 @@ void scheduler_MLFL(int quantum)
                 else
                 {
                     DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d\n" RESET, newPCB->inputPID, newPCB->memSize);
-                    enqueuePriority(Memory_Buffer, newPCB, 1);
+                    enqueuePriority(Memory_Buffer, newPCB, newPCB->priority);
                 }
             }
         }
@@ -1328,6 +1350,7 @@ int main(int argc, char *argv[])
     DEBUG_PRINTF("[SCHEDULER] Terminated normally...\n");
 
     /* Generate logs */
+
     DEBUG_PRINTF("[SCHEDULER] Logging output...\n");
 
     generateSchedulerLog(outputQueue);
@@ -1337,11 +1360,12 @@ int main(int argc, char *argv[])
     generateSchedulerPerf(finishedProcesses);
 
     /* Free resources */
+
     DEBUG_PRINTF("[SCHEDULER] Freeing resources...\n");
 
     freeAllResources();
 
-    destroyClk(true);
+    destroyClk(false);
 
     exit(0);
 }
