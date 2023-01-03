@@ -56,12 +56,12 @@ typedef struct
 
 typedef struct treeNode
 {
-    int data;                /**< the size of the treeNode */
-    int startIndx;           /**< the start of the memory piece */
-    int endIndx;             /**< the end of the memory piece */
-    struct treeNode *left;   /**< a treeNode representing the left subtree */
-    struct treeNode *parent; /**< a treeNode to the parent; equal NULL if there's no parent */
-    struct treeNode *right;  /**< a treeNode representing the right subtree */
+    int data;              // size of the memory block
+    int startIndx;         // start index of the memory block
+    int endIndx;           // end index of the memory block
+    struct treeNode *left; // left subtree
+    struct treeNode *parent;
+    struct treeNode *right; // right subtree
 } treeNode;
 
 /* Queue */
@@ -97,7 +97,8 @@ void destroyMultiLevelQueue(MultiLevelQueue *q);
 
 /************************************************* Buddy system tree *************************************************/
 
-#define MemorySize 1024
+#define MEMORY_SIZE 1024
+#define MAX_MEMORY_NODE_SIZE 256
 
 /**
  * @brief
@@ -115,7 +116,7 @@ unsigned int nextPowerOf2(unsigned int n);
  * @param start the start of the memory the treeNode represents.
  * @return treeNode* the created treeNode
  */
-treeNode *newNode(int data, treeNode *parent, int start);
+treeNode *newMemoryNode(int data, treeNode *parent, int start);
 
 /**
  * @brief
@@ -153,7 +154,7 @@ treeNode *Allocate(int size);
  * @param root
  * @return int
  */
-int Deallocate_(treeNode *root);
+int deallocateRecursive(treeNode *root);
 
 /**
  * @brief

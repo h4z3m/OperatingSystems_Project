@@ -503,12 +503,19 @@ void scheduler_HPF()
         /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
         while (receiveMessage(&newPCB) != -1)
         {
-            if (newPCB->memSize > MemorySize)
+            if (newPCB->memSize > MEMORY_SIZE )
             {
                 DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d is greater than available memory %d. Cancelling process...\n" RESET,
                              newPCB->inputPID,
                              newPCB->memSize,
-                             MemorySize);
+                             MEMORY_SIZE);
+                process_count--;
+            }
+            else if(newPCB->memSize > MAX_MEMORY_NODE_SIZE){
+                DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d is greater than the allowed size %d. Cancelling process...\n" RESET,
+                             newPCB->inputPID,
+                             newPCB->memSize,
+                             MAX_MEMORY_NODE_SIZE);
                 process_count--;
             }
             else
@@ -675,12 +682,12 @@ void scheduler_SJF()
         /* New process has just arrived, put it in queue, then check if it has lower rem time than current*/
         while (receiveMessage(&newPCB) != -1)
         {
-            if (newPCB->memSize > MemorySize)
+            if (newPCB->memSize > MEMORY_SIZE)
             {
                 DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d is greater than available memory %d. Cancelling process...\n" RESET,
                              newPCB->inputPID,
                              newPCB->memSize,
-                             MemorySize);
+                             MEMORY_SIZE);
                 process_count--;
             }
             else
@@ -822,12 +829,12 @@ void scheduler_RR(int quantum)
         while (receiveMessage(&newPCB) != -1)
         {
 
-            if (newPCB->memSize > MemorySize)
+            if (newPCB->memSize > MEMORY_SIZE)
             {
                 DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d is greater than available memory %d. Cancelling process...\n" RESET,
                              newPCB->inputPID,
                              newPCB->memSize,
-                             MemorySize);
+                             MEMORY_SIZE);
                 process_count--;
             }
             else
@@ -1018,12 +1025,12 @@ void scheduler_MLFL(int quantum)
         while (receiveMessage(&newPCB) != -1)
         {
 
-            if (newPCB->memSize > MemorySize)
+            if (newPCB->memSize > MEMORY_SIZE)
             {
                 DEBUG_PRINTF(RED "[SCHEDULER] Failed to allocate memory for process [%d]: Memory requested %d is greater than available memory %d. Cancelling process...\n" RESET,
                              newPCB->inputPID,
                              newPCB->memSize,
-                             MemorySize);
+                             MEMORY_SIZE);
                 process_count--;
             }
             else

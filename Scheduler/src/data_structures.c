@@ -263,8 +263,7 @@ void destroyMultiLevelQueue(MultiLevelQueue *q)
 
 /************************************************* Buddy system tree *************************************************/
 
-
-treeNode *treeRoot = (void *)(0);
+treeNode *Root = (void *)(0);
 
 unsigned int nextPowerOf2(unsigned int n)
 {
@@ -278,7 +277,7 @@ unsigned int nextPowerOf2(unsigned int n)
     return n;
 }
 
-treeNode *newNode(int data, treeNode *parent, int start)
+treeNode *newMemoryNode(int data, treeNode *parent, int start)
 {
     treeNode *node1 = (treeNode *)malloc(sizeof(treeNode));
     node1->data = data;
@@ -292,7 +291,7 @@ treeNode *newNode(int data, treeNode *parent, int start)
 
 treeNode *allocateRoot(int size, int currentSize, treeNode *grandParent, char dir, int start)
 {
-    treeNode *parent = newNode(currentSize, grandParent, start);
+    treeNode *parent = newMemoryNode(currentSize, grandParent, start);
 
     if (grandParent != NULL)
     {
@@ -305,7 +304,7 @@ treeNode *allocateRoot(int size, int currentSize, treeNode *grandParent, char di
     treeNode *child = NULL;
     while (currentSize > size)
     {
-        child = newNode(currentSize / 2, parent, start);
+        child = newMemoryNode(currentSize / 2, parent, start);
 
         parent->left = child;
         parent = child;
@@ -323,17 +322,17 @@ treeNode *allocateTree(treeNode *root, int size)
     if (root == NULL)
         return NULL;
 
-    // allocated node
+    // fully allocated node happens when trying to allocate small block but larger block is full
     if (root->left == NULL && root->right == NULL)
         return NULL;
 
-    // if the this node has a size that equals to the double of the desired size
+    // if the this node has a size = double of the block, it's POSSIBLE
     if (root->data == 2 * size)
     {
         // If the left is free -> Allocate
         if (root->left == NULL)
         {
-            treeNode *child = newNode(size, root, root->startIndx);
+            treeNode *child = newMemoryNode(size, root, root->startIndx);
 
             root->left = child;
 
@@ -342,7 +341,7 @@ treeNode *allocateTree(treeNode *root, int size)
         // If the right is free -> Allocate
         else if (root->right == NULL)
         {
-            treeNode *child = newNode(size, root, root->startIndx + root->data / 2);
+            treeNode *child = newMemoryNode(size, root, root->startIndx + root->data / 2);
 
             root->right = child;
 
@@ -351,10 +350,10 @@ treeNode *allocateTree(treeNode *root, int size)
         else
             return NULL;
     }
-    // if the this node has a size that is bigger than the double of the desired size
+    // if the this node has a size > double of the block, continue with the tree
     else if (root->data > 2 * size)
     {
-
+        // If both subtrees are used
         if (root->left != NULL && root->right != NULL)
         {
             treeNode *left = allocateTree(root->left, size);
@@ -366,7 +365,7 @@ treeNode *allocateTree(treeNode *root, int size)
             else
                 return left;
         }
-        // If the tree has left subtree -> If it finds a place, then the desired memory is allocated. Otherwise it call alloc1 for allocation.
+        // If the tree has left subtree work on it.
         else if (root->left != NULL)
         {
             treeNode *left = allocateTree(root->left, size);
@@ -379,8 +378,7 @@ treeNode *allocateTree(treeNode *root, int size)
             else
                 return left;
         }
-        // If the tree has right subtree -> solve(right subtree). If it finds a place,
-        //  then the desired memory is allocated. Otherwise it call alloc1 for allocation.
+        // If the tree has right subtree work on it.
         else
         {
             treeNode *right = allocateTree(root->right, size);
@@ -394,29 +392,33 @@ treeNode *allocateTree(treeNode *root, int size)
                 return right;
         }
     }
-    else
+    else // not possible i think
         return NULL;
 }
 
 treeNode *Allocate(int size)
 {
-    int blockSize = nextPowerOf2(size);
 
-    if (treeRoot == NULL)
+    int memoryBlockSize = nextPowerOf2(size);
+
+    // it is the first memory to add in the system
+    if (Root == NULL)
     {
-        treeRoot = newNode(MemorySize, NULL, 0);
-        if (MemorySize > blockSize)
-            return allocateRoot(blockSize, MemorySize / 2, treeRoot, 'l', 0);
-        else
-            return treeRoot;
+        // create a node for the root
+        Root = newMemoryNode(MEMORY_SIZE, NULL, 0);
+
+        if (MEMORY_SIZE > memoryBlockSize) // if there is  enough space, allocate it
+            return allocateRoot(memoryBlockSize, MEMORY_SIZE / 2, Root, 'l', 0);
+        else // if it's the first memoryBlock and its size larger than memorySize, then return root = NULL
+            return Root;
     }
     else
-        return allocateTree(treeRoot, blockSize);
+        return allocateTree(Root, memoryBlockSize);
 }
 
-int Deallocate_(treeNode *root)
+int deallocateRecursive(treeNode *root)
 {
-    if (root == NULL)
+    if (root == NULL) // when deallocating the root of the tree
         return 0;
 
     if (root->left == NULL && root->right == NULL)
@@ -430,7 +432,9 @@ int Deallocate_(treeNode *root)
                 parent->left = NULL;
         }
         free(root);
-        return Deallocate_(parent);
+
+        // to deallocate the parent if it was the only child
+        return deallocateRecursive(parent);
     }
 
     return 1;
@@ -438,6 +442,7 @@ int Deallocate_(treeNode *root)
 
 void Deallocate(treeNode *root)
 {
-    if (Deallocate_(root) == 0)
-        treeRoot = NULL;
+    // tree is now fully empty
+    if (deallocateRecursive(root) == 0)
+        Root = NULL;
 }
