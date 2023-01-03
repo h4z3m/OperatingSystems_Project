@@ -324,11 +324,11 @@ treeNode *allocateTree(treeNode *root, int size)
     if (root == NULL)
         return NULL;
 
-    // allocated node
+    // fully allocated node happens when trying to allocate small block but larger block is full
     if (root->left == NULL && root->right == NULL)
         return NULL;
 
-    // if the this node has a size that equals to the double of the desired size
+    // if the this node has a size = double of the block, it's POSSIBLE
     if (root->data == 2 * size)
     {
         // If the left is free -> Allocate
@@ -352,7 +352,7 @@ treeNode *allocateTree(treeNode *root, int size)
         else
             return NULL;
     }
-    // if the this node has a size that is bigger than the double of the desired size
+    // if the this node has a size > double of the block, continue with the tree
     else if (root->data > 2 * size)
     {
 
@@ -368,6 +368,8 @@ treeNode *allocateTree(treeNode *root, int size)
                 return left;
         }
         // If the tree has left subtree -> If it finds a place, then the desired memory is allocated. Otherwise it call alloc1 for allocation.
+        // If the tree has left subtree work on it.
+
         else if (root->left != NULL)
         {
             treeNode *left = allocateTree(root->left, size);
@@ -403,12 +405,14 @@ treeNode *Allocate(int size)
 {
     int blockSize = nextPowerOf2(size);
 
+    // it is the first memory to add in the system
     if (treeRoot == NULL)
     {
+        // create a node for the root
         treeRoot = newNode(MemorySize, NULL, 0);
-        if (MemorySize > blockSize)
+        if (MemorySize > blockSize) // if there is  enough space, allocate it
             return allocateRoot(blockSize, MemorySize / 2, treeRoot, 'l', 0);
-        else
+        else // if it's the first memoryBlock and its size larger than memorySize, then return root = NULL
             return treeRoot;
     }
     else
@@ -417,7 +421,7 @@ treeNode *Allocate(int size)
 
 int Deallocate_(treeNode *root)
 {
-    if (root == NULL)
+    if (root == NULL) // when deallocating the root of the tree
         return 0;
 
     if (root->left == NULL && root->right == NULL)
@@ -439,6 +443,7 @@ int Deallocate_(treeNode *root)
 
 void Deallocate(treeNode *root)
 {
+    // tree is now fully empty
     if (Deallocate_(root) == 0)
         treeRoot = NULL;
 }
